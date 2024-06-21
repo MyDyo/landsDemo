@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.PolicyMapper">
+
+    <!-- 查询所有政策，支持分页 -->
+<!--    <select id="findAll" resultType="com.demo.entity.Policy">-->
+<!--        SELECT * FROM policies-->
+<!--        ORDER BY upload_time DESC-->
+<!--    </select>-->
+
+<!--    &lt;!&ndash; 根据标题搜索政策，支持分页 &ndash;&gt;-->
+<!--    <select id="findByTitleContaining" parameterType="java.lang.String" resultType="com.demo.entity.Policy">-->
+<!--        SELECT * FROM policies-->
+<!--        WHERE title LIKE CONCAT('%', #{title}, '%')-->
+<!--        ORDER BY upload_time DESC-->
+<!--    </select>-->
+
+</mapper>
