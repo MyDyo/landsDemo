@@ -10,14 +10,11 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 @Configuration
-@MapperScan("com.nwu.mapper")
+@MapperScan("com.demo.mapper")
 /**
  * <p>
  *  服务实现类
  * </p>
- *
- * @author wangb
- * @since 2022-04-11
  */
 public class SciResearchConfig {
 

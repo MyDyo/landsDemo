@@ -15,8 +15,6 @@ spring:
 #mybatis:
 #  # 加载 Mybatis 映射文件
 #  mapper-locations: classpath:mapper/**/*Mapper.xml
-#  # 配置 pojo 别名
-#  type-aliases-package: com.nwu.entities
 #  # 配置下划线自动转驼峰命名
 #  configuration:
 #    map-underscore-to-camel-case: true
@@ -24,7 +22,7 @@ server:
   port: 9090
 logging:
   level:
-    com.nwu.mapper: debug
+    com.demo.mapper: debug
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
@@ -35,5 +33,5 @@ mybatis-plus:
       logic-not-delete-value: 0
 
   mapper-locations: classpath*:/mapper/*.xml
-  type-aliases-package: com.example.demo.domain
+  type-aliases-package: com.demo.domain
 

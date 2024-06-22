@@ -23,8 +23,6 @@ import springfox.documentation.swagger2.annotations.EnableSwagger2;
  *  服务实现类
  * </p>
  *
- * @author wangb
- * @since 2022-04-11
  */
 public class SwaggerConfig implements WebMvcConfigurer {
     /*
@@ -36,10 +34,10 @@ public class SwaggerConfig implements WebMvcConfigurer {
     public Docket getDocket(){
         ApiInfoBuilder apiInfoBuilder = new ApiInfoBuilder();
         //指定封面信息
-        apiInfoBuilder.title("液化系统后端接口说明")
+        apiInfoBuilder.title("土地规划系统后端接口说明")
                 .description("此文档详细说明了液化系统后端接口规范")
                 .version("v 2.0.1")
-                .contact( new Contact("wangb","","1076891804@qq.com"))
+                .contact( new Contact("MyDyo","","273485717@qq.com"))
                 .build();
 
         ApiInfo apiInfo = apiInfoBuilder.build();
@@ -48,7 +46,7 @@ public class SwaggerConfig implements WebMvcConfigurer {
         Docket docket = new Docket(DocumentationType.SWAGGER_2)//指定文档路径
                 .apiInfo(apiInfo)
                 .select()
-                .apis(RequestHandlerSelectors.basePackage("com.nwu.controller"))
+                .apis(RequestHandlerSelectors.basePackage("com.demo.controller"))
                 .paths(PathSelectors.any())
                 .build();
 

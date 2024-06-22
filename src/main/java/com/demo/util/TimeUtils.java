@@ -4,8 +4,6 @@ import java.text.SimpleDateFormat;
 
 /**
  * 时间格式化类
- * @author Rex Joush
- * @time 2022.01.03
  */
 public class TimeUtils {
 

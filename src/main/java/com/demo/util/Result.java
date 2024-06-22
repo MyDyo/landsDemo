@@ -4,8 +4,6 @@ import com.alibaba.fastjson.JSONObject;
 
 /**
  * 前端封装返回结果类
- * @author Rex Joush
- * @time 2022.01.03
  */
 public class Result {
 

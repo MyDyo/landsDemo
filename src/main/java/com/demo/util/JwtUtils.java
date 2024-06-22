@@ -10,8 +10,6 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.Date;
 
 /**
- * @author wangb
- * @since 2022/5/24
  */
 public class JwtUtils {
 
