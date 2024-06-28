@@ -9,12 +9,13 @@ spring:
     time-zone: GMT+8
   gson:
     date-format: yyyy-MM-dd HH:mm:ss
-
+#  resources:
+#    locations: file:F:\file
 
 # mybatis 信息
 #mybatis:
 #  # 加载 Mybatis 映射文件
-#  mapper-locations: classpath:mapper/**/*Mapper.xml
+#  mapper-locations: classpath:mapper/**/*mapper.xml
 #  # 配置下划线自动转驼峰命名
 #  configuration:
 #    map-underscore-to-camel-case: true
@@ -32,6 +33,12 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-  mapper-locations: classpath*:/mapper/*.xml
+  mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.demo.domain
+
+accessFile:
+    resourceHandler: /** #匹配需要拦截的URL
+    location: F:/localhostfile  #本地文件夹
+
+
 

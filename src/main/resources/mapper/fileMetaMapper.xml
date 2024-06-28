@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.FileMetaMapper">
+
+<!--     查询所有政策 -->
+    <select id="findAll" resultType="com.demo.entity.fileMeta">
+        SELECT * FROM fileMeta
+        ORDER BY uploadTime DESC
+    </select>
+
+<!--    &lt;!&ndash; 根据标题搜索政策，支持分页 &ndash;&gt;-->
+<!--    <select id="findByTitleContaining" parameterType="java.lang.String" resultType="com.demo.entity.Policy">-->
+<!--        SELECT * FROM policies-->
+<!--        WHERE title LIKE CONCAT('%', #{title}, '%')-->
+<!--        ORDER BY upload_time DESC-->
+<!--    </select>-->
+    <insert id="insertFileMeta" parameterType="com.demo.entity.fileMeta">
+            INSERT INTO fileMeta (fileName,fileStyle, uploadTime,fileURL)
+            VALUES (#{filename},#{filestyle}, #{uploadTime},#{fileUrl})
+    </insert>
+    <select id="selectFileMetaById" parameterType="int" resultType="com.demo.entity.fileMeta">
+        SELECT fileId, fileName, fileURL, uploadTime FROM fileMeta WHERE fileId = #{fileId}
+    </select>
+
+</mapper>

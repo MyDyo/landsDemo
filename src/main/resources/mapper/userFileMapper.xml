@@ -1,0 +1,27 @@
+<!--<?xml version="1.0" encoding="UTF-8"?>-->
+<!--<beans xmlns="http://www.springframework.org/schema/beans"-->
+<!--       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"-->
+<!--       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">-->
+
+<!--</beans>-->
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.userFileMapper">
+
+    <insert id="insertUserFile" parameterType="com.demo.entity.userFile">
+        INSERT INTO userFile (userName, userFileName, userFileURL)
+        VALUES (#{userName}, #{userFileName}, #{userFileURL})
+    </insert>
+
+    <select id="selectUserFileById" resultType="com.demo.entity.userFile">
+        SELECT userFileId, userName, userFileName, userFileURL
+        FROM userFile
+        WHERE userFileId = #{userFileId}
+    </select>
+
+    <select id="selectUserFileByuserFileURL" resultType="com.demo.entity.userFile">
+        SELECT userFileId, userName, userFileName, userFileURL
+        FROM userFile
+        WHERE userFileUrl = #{userFileUrl}
+    </select>
+
+</mapper>

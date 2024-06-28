@@ -1,0 +1,30 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.PostMapper">
+    <!-- SQL mappings -->
+    <select id="selectAllPosts" resultType="com.demo.entity.Post">
+        SELECT * FROM posts;
+    </select>
+
+    <select id="selectPostById" parameterType="int" resultType="com.demo.entity.Post">
+        SELECT * FROM posts WHERE postId = #{postId};
+    </select>
+
+    <insert id="insertPost">
+        INSERT INTO posts (userId, title, content, tags, createdAt, updatedAt)
+        VALUES (#{userId}, #{title}, #{content}, #{tags}, NOW(), NOW())
+    </insert>
+
+    <update id="updatePost">
+        UPDATE posts SET title = #{title}, content = #{content}, tags = #{tags}, updated_at = NOW()
+        WHERE postId = #{postId};
+    </update>
+
+    <delete id="deletePostById">
+        DELETE FROM posts WHERE postId = #{postId};
+    </delete>
+
+     <select id="selectPostsByTag" parameterType="string" resultType="com.demo.entity.Post">
+        SELECT * FROM posts WHERE tags LIKE CONCAT('%', #{tag}, '%');
+    </select>
+</mapper>

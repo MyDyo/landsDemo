@@ -1,0 +1,17 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.LikeMapper">
+    <!-- SQL mappings -->
+    <insert id="insertLike" parameterType="com.demo.entity.Like">
+        INSERT INTO likes (userId, postId, commentId, createdAt)
+        VALUES (#{userId}, #{postId}, #{commentId}, #{createdAt});
+    </insert>
+
+    <select id="countLikesForPost" parameterType="int" resultType="int">
+        SELECT COUNT(*) FROM likes WHERE postId = #{postId};
+    </select>
+
+    <select id="countLikesForComment" parameterType="int" resultType="int">
+        SELECT COUNT(*) FROM likes WHERE commentId = #{commentId};
+    </select>
+</mapper>

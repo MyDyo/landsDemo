@@ -1,0 +1,29 @@
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.demo.mapper.CommentMapper">
+    <!-- SQL mappings -->
+<select id="selectCommentsByPostId" resultType="com.demo.entity.Comment">
+        SELECT * FROM comments WHERE postId = #{postId}
+    </select>
+
+    <select id="selectCommentById" resultType="com.demo.entity.Comment">
+        SELECT * FROM comments WHERE commentId = #{commentId}
+    </select>
+
+    <insert id="insertComment">
+        INSERT INTO comments (postId, userId, parentId, content, createdAt, updatedAt)
+        VALUES (#{postId}, #{userId}, #{parentId}, #{content}, NOW(), NOW())
+    </insert>
+
+    <update id="updateComment">
+        UPDATE comments SET content = #{content}, updatedAt = NOW() WHERE commentId = #{commentId}
+    </update>
+
+    <delete id="deleteCommentById">
+        DELETE FROM comments WHERE commentId = #{commentId}
+    </delete>
+    <insert id="insertReplyComment" parameterType="com.demo.entity.Comment">
+        INSERT INTO comments (postId, userId, content, parentId, likesCount, createdAt, updatedAt)
+        VALUES (#{postId}, #{userId}, #{content}, #{parentId}, #{likesCount}, #{createdAt}, #{updatedAt})
+    </insert>
+</mapper>
