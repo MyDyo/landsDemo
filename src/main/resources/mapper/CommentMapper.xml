@@ -11,19 +11,19 @@
     </select>
 
     <insert id="insertComment">
-        INSERT INTO comments (postId, userId, parentId, content, createdAt, updatedAt)
-        VALUES (#{postId}, #{userId}, #{parentId}, #{content}, NOW(), NOW())
+        INSERT INTO comments (postId, userId, parentId, content, createdAt, updatedAt,likesCount)
+        VALUES (#{postId}, #{userId}, #{parentId}, #{content}, NOW(), NOW(), #{likesCount})
     </insert>
 
     <update id="updateComment">
-        UPDATE comments SET content = #{content}, updatedAt = NOW() WHERE commentId = #{commentId}
+        UPDATE comments SET likesCounts = #{likesCounts}, updatedAt = NOW() WHERE commentId = #{commentId}
     </update>
 
-    <delete id="deleteCommentById">
-        DELETE FROM comments WHERE commentId = #{commentId}
-    </delete>
-    <insert id="insertReplyComment" parameterType="com.demo.entity.Comment">
-        INSERT INTO comments (postId, userId, content, parentId, likesCount, createdAt, updatedAt)
-        VALUES (#{postId}, #{userId}, #{content}, #{parentId}, #{likesCount}, #{createdAt}, #{updatedAt})
-    </insert>
+<!--    <delete id="deleteCommentById">-->
+<!--        DELETE FROM comments WHERE commentId = #{commentId}-->
+<!--    </delete>-->
+<!--    <insert id="insertReplyComment" parameterType="com.demo.entity.Comment">-->
+<!--        INSERT INTO comments (postId, userId, content, parentId, likesCount, createdAt, updatedAt)-->
+<!--        VALUES (#{postId}, #{userId}, #{content}, #{parentId}, #{likesCount}, #{createdAt}, #{updatedAt})-->
+<!--    </insert>-->
 </mapper>

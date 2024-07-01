@@ -12,8 +12,8 @@ public interface CommentMapper extends BaseMapper<Comment> {
     Comment selectCommentById(int commentId);
     void insertComment(Comment comment);
     void updateComment(Comment comment);
-    void deleteCommentById(int commentId);
-    void insertReplyComment(Comment comment);
+//    void deleteCommentById(int commentId);
+//    void insertReplyComment(Comment comment);
 
 }
 

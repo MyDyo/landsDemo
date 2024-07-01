@@ -36,9 +36,15 @@ mybatis-plus:
   mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.demo.domain
 
-accessFile:
-    resourceHandler: /** #匹配需要拦截的URL
-    location: F:/localhostfile  #本地文件夹
+# 文件上传相关
+file:
+  bucketName: def_bucket
+  local:
+    enable: true
+#    base-path: /home/app/ws_demo/ws-files
+    base-path: F:/code/guotufiles
+    baseUrl: http://localhost:9090/profile
+
 
 
 

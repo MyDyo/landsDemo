@@ -10,6 +10,6 @@ List<Comment> getCommentsByPostId(int postId);
     Comment getCommentById(int commentId);
     Comment saveComment(Comment comment);
     Comment updateComment(Comment comment);
-    void deleteComment(int commentId);
-    void addReplyComment(Comment comment);
+//    void deleteComment(int commentId);
+//    void addReplyComment(Comment comment);
 }

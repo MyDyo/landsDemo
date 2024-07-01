@@ -10,7 +10,6 @@ public class Post implements Serializable {
     @TableId
     private int postId;
     private int userId;
-    private String title;
     private String content;
     private int likesCount;
     private String tags; // 新增标签字段
@@ -41,14 +40,6 @@ public class Post implements Serializable {
 
     public void setUserId(int userId) {
         this.userId = userId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
     }
 
     public String getContent() {

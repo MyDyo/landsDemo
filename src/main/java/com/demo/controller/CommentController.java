@@ -16,17 +16,17 @@ public class CommentController {
     @Autowired
     private CommentService commentService;
 
-    @GetMapping("/getCommentsByPostIds/{postId}")
+    @GetMapping("/getCommentsByPostId/{postId}")
     public R getCommentsByPostId(@PathVariable int postId) {
         List<Comment> comments=commentService.getCommentsByPostId(postId);
         return R.ok().data("comments",comments);
     }
 
-//    @GetMapping("/{commentId}")
-//    public R getCommentById(@PathVariable int postId,@PathVariable int commentId) {
-//        Comment comment=commentService.getCommentById(commentId);
-//        return R.ok().data("comment",comment);
-//    }
+    @GetMapping("/{commentId}")
+    public R getCommentById(@PathVariable int commentId) {
+        Comment comment=commentService.getCommentById(commentId);
+        return R.ok().data("comment",comment);
+    }
 
     @PostMapping("addComment")
     public R addComment(@RequestBody Comment comment) {
@@ -34,22 +34,22 @@ public class CommentController {
         return R.ok();
     }
 
-    @PutMapping("/{commentId}")
-    public R updateComment( @RequestBody Comment comment) {
-//        comment.setCommentId(commentId);
+    @PutMapping("updateComment/{commentId}")
+    public R updateComment(@PathVariable int commentId, @RequestBody Comment comment) {
+        comment.setCommentId(commentId);
         commentService.updateComment(comment);
         return R.ok();
     }
-    @PostMapping("/addReplyComment/{commentId}")
-    public R addReplyComment(@PathVariable int commentId, @RequestBody Comment comment) {
-        comment.setParentId(commentId);
-        commentService.addReplyComment(comment);
-        return R.ok();
-    }
+//    @PostMapping("/addReplyComment/{commentId}")
+//    public R addReplyComment(@PathVariable int commentId, @RequestBody Comment comment) {
+//        comment.setParentId(commentId);
+//        commentService.addReplyComment(comment);
+//        return R.ok();
+//    }
 
-    @DeleteMapping("/{commentId}")
-    public R deleteComment(@PathVariable int commentId) {
-        commentService.deleteComment(commentId);
-        return R.ok();
-    }
+//    @DeleteMapping("/{commentId}")
+//    public R deleteComment(@PathVariable int commentId) {
+//        commentService.deleteComment(commentId);
+//        return R.ok();
+//    }
 }

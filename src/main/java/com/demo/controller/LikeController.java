@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
+
 @RestController
 @RequestMapping("/api")
 public class LikeController {
@@ -16,16 +18,12 @@ public class LikeController {
 
    @Autowired
     private LikeService likeService;
-   @Autowired
-   private Post post;
-   @Autowired
-   private Comment comment;
-//增加点赞帖子记录
-    @PostMapping("/posts/likes/{postId}")
-    public R likePost(@PathVariable int postId, @RequestBody int userId) {
-        likeService.likePost(userId, postId);
-        return R.ok();
-    }
+////增加点赞帖子记录
+//    @PostMapping("/posts/likes/{postId}")
+//    public R likePost(@PathVariable int postId, @RequestBody int userId) {
+//        likeService.likePost(userId, postId);
+//        return R.ok();
+//    }
 //增加点赞评论记录
     @PostMapping("/comments/likes/{commentId}")
     public R likeComment(@PathVariable int commentId, @RequestBody int userId) {

@@ -20,7 +20,7 @@
             VALUES (#{filename},#{filestyle}, #{uploadTime},#{fileUrl})
     </insert>
     <select id="selectFileMetaById" parameterType="int" resultType="com.demo.entity.fileMeta">
-        SELECT fileId, fileName, fileURL, uploadTime FROM fileMeta WHERE fileId = #{fileId}
+        SELECT fileId, fileName,fileStyle, fileURL, uploadTime FROM fileMeta WHERE fileId = #{fileId}
     </select>
 
 </mapper>

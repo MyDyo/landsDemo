@@ -33,13 +33,13 @@ public class PostController {
     }
 
 
-    @PostMapping
+    @PostMapping("createPost")
     public R createPost(@RequestBody Post post) {
         postMapper.insertPost(post);
         return R.ok();
     }
 
-    @PutMapping("/{postId}")
+    @PutMapping("updatePost/{postId}")
     public R updatePost(@PathVariable int postId, @RequestBody Post post) {
         post.setPostId(postId);
         postMapper.updatePost(post);

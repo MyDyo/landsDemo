@@ -21,7 +21,7 @@ public class FileController {
     @Autowired
     private FileMetaMapper fileMetaMapper;
 //    管理员在前端表单窗口中填入文件名、文件类型、文件上传时间、文件的本地URL地址，后端根据这些信息，将数据存入数据库
-    @PostMapping("/uploadFileMeta")
+    @PostMapping("uploadFileMeta")
     public R uploadFileMeta(@RequestParam String fileName, @RequestParam String fileStyle, @RequestParam Date uploadTime, @RequestParam String fileURL) {
        fileMetaMapper.insertFileMeta(fileName,fileStyle,uploadTime,fileURL);
        return R.ok();
@@ -42,11 +42,25 @@ public class FileController {
     @GetMapping("viewFile")
     public R viewFile(){
         List<fileMeta> fileMetaList = fileMetaMapper.findAll();
-        return R.ok().data("fileMetaList", fileMetaList);
+        int total = fileMetaList.size();
+        return R.ok().data("fileMetaList", fileMetaList).data("total", total);
+    }
+
+    @GetMapping("getRelatedFiles/{fileId}")
+    public R getRelatedFiles(@PathVariable Integer fileId) {
+        Integer prevId;
+        prevId=fileId-1;
+        System.out.println(prevId);
+        Integer nextId;
+        nextId=fileId+1;
+        System.out.println(nextId);
+        fileMeta prevFile = fileMetaMapper.selectFileMetaById(prevId);
+        fileMeta nextFile = fileMetaMapper.selectFileMetaById(nextId);
+        return R.ok().data("prevFile",prevFile).data("nextFile",nextFile);
     }
 
 //根据从前端获取到的用户名，文件名、url信息将经过用户修改后的文件存入用户文件表
-    @PostMapping("/createUserFile")
+    @PostMapping("createUserFile")
     public R createUserFile(@RequestParam String username, @RequestParam String fileName, @RequestParam String fileUrl) {
         userFileService.createUserFile(username, fileName, fileUrl);
         return R.ok();

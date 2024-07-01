@@ -7,7 +7,7 @@ import java.io.Serializable;
 @TableName("users")
 public class User implements Serializable {
     @TableId
-    private Long userId;
+    private int userId;
     private String username;
     private String password;
     private String userstyle;
@@ -20,11 +20,11 @@ public class User implements Serializable {
         this.userstyle = userstyle;
     }
 
-    public Long getUserId() {
+    public int getUserId() {
         return userId;
     }
 
-    public void setUserId(Long userId) {
+    public void setUserId(int userId) {
         this.userId = userId;
     }
 

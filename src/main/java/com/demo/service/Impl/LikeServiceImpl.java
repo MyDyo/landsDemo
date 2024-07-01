@@ -15,17 +15,15 @@ import java.time.LocalDateTime;
 public class LikeServiceImpl extends ServiceImpl<LikeMapper, Like> implements LikeService {
     @Autowired
     private LikeMapper likeMapper;
-    @Autowired
-    @Override
-    @Transactional
-    public void likePost(int userId, int postId) {
-        Like like = new Like();
-        like.setUserId(userId);
-        like.setPostId(postId);
-        like.setCreatedAt(LocalDateTime.now());
-        likeMapper.insertLike(like);
-
-    }
+//    @Autowired
+//    @Transactional
+//    public void likePost(int userId, int postId) {
+//        Like like = new Like();
+//        like.setUserId(userId);
+//        like.setPostId(postId);
+//        like.setCreatedAt(LocalDateTime.now());
+//        likeMapper.insertLike(like);
+//    }
 
     @Override
     @Transactional

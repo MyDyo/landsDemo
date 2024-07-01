@@ -39,14 +39,14 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         return comment;
     }
 
-    @Override
-    @Transactional
-    public void deleteComment(int commentId) {
-        commentMapper.deleteCommentById(commentId);
-    }
-
-    @Transactional
-    public void addReplyComment(Comment comment) {
-        commentMapper.insertComment(comment);
-    }
+//    @Override
+//    @Transactional
+//    public void deleteComment(int commentId) {
+//        commentMapper.deleteCommentById(commentId);
+//    }
+//
+//    @Transactional
+//    public void addReplyComment(Comment comment) {
+//        commentMapper.insertComment(comment);
+//    }
 }
