@@ -9,6 +9,8 @@ spring:
     time-zone: GMT+8
   gson:
     date-format: yyyy-MM-dd HH:mm:ss
+  main:
+    allow-bean-definition-overriding: true
 #  resources:
 #    locations: file:F:\file
 
@@ -21,6 +23,9 @@ spring:
 #    map-underscore-to-camel-case: true
 server:
   port: 9090
+  servlet:
+    session:
+      timeout: 172800
 logging:
   level:
     com.demo.mapper: debug
@@ -32,19 +37,17 @@ mybatis-plus:
       id-type: auto
       logic-delete-value: 1
       logic-not-delete-value: 0
-
   mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.demo.domain
 
 # 文件上传相关
-file:
-  bucketName: def_bucket
-  local:
-    enable: true
-#    base-path: /home/app/ws_demo/ws-files
-    base-path: F:/code/guotufiles
-    baseUrl: http://localhost:9090/profile
-
+#file:
+#  bucketName: def_bucket
+#  local:
+#    enable: true
+##    base-path: /home/app/ws_demo/ws-files
+#    base-path: F:/code/guotufiles
+#    baseUrl: http://localhost:9090/profile
 
 
 

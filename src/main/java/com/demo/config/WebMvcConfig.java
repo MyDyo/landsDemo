@@ -1,10 +1,16 @@
 package com.demo.config;
 
+import com.demo.interceptor.LoginInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 /**
  * WebMvc 配置类
  */
@@ -13,7 +19,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Autowired
     private FileProperties fileProperties;
-
+    static final String ORIGINS[] = new String[]{"GET", "POST", "PUT", "DELETE","OPTIONS"};
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // 静态资源映射到classpath:/static/
@@ -36,4 +42,30 @@ public class WebMvcConfig implements WebMvcConfigurer {
                     .addResourceLocations(resourcePattern);
         }
     }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(new LoginInterceptor())
+                .addPathPatterns("/**")// /** 表示拦截所有请求,静态资源也会被拦截
+                .excludePathPatterns("/api/login")//登录请求
+                .excludePathPatterns("/api/register");//注册请求
+    }
+
+    private CorsConfiguration corsConfig() {
+        CorsConfiguration corsConfiguration = new CorsConfiguration();
+        corsConfiguration.addAllowedOriginPattern("*");
+        corsConfiguration.addAllowedHeader("*");
+        corsConfiguration.addAllowedMethod("*");
+        corsConfiguration.setAllowCredentials(true);
+        corsConfiguration.setMaxAge(3600L);
+        return corsConfiguration;
+    }
+    @Bean
+    public CorsFilter corsFilter() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", corsConfig());
+        return new CorsFilter(source);
+    }
+
+
 }

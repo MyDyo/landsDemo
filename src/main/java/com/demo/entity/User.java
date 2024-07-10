@@ -1,15 +1,19 @@
 package com.demo.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import java.io.Serializable;
 
 @TableName("users")
 public class User implements Serializable {
-    @TableId
+    @TableId(value = "userId")
     private int userId;
+    @TableField("userName")
     private String username;
+    @TableField("password")
     private String password;
+    @TableField("userStyle")
     private String userstyle;
 
     public String getUserstyle() {
