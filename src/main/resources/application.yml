@@ -3,7 +3,7 @@ spring:
     url: jdbc:mysql://localhost:3306/policyDemo
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: root
-    password: 1234
+    password: 123456
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: GMT+8
@@ -11,6 +11,9 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
   main:
     allow-bean-definition-overriding: true
+#  mvc:
+#    pathmatch:
+#      matching-strategy: ant_path_matcher
 #  resources:
 #    locations: file:F:\file
 
@@ -39,6 +42,9 @@ mybatis-plus:
       logic-not-delete-value: 0
   mapper-locations: classpath*:mapper/*.xml
   type-aliases-package: com.demo.domain
+
+geoserver:
+  url: http://localhost:8081/geoserver/tongguan
 
 # 文件上传相关
 #file:

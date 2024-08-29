@@ -3,6 +3,8 @@ package com.demo.interceptor;
 import com.demo.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpStatus;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
@@ -18,6 +20,7 @@ import javax.servlet.http.HttpSession;
  * @Description: 主要完成对未登录用户进行接口请求的拦截功能
  */
 @Slf4j
+@Component
 public class LoginInterceptor implements HandlerInterceptor {
     /**
      * 目标方法执行之前
@@ -26,6 +29,9 @@ public class LoginInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String requestURI = request.getRequestURI();
         log.info("拦截的请求路径是{}", requestURI);
+        if(requestURI.equals("/doc.html") || requestURI.equals("/error")) {
+            return true;
+        }
         //登录检查逻辑
         HttpSession session = request.getSession();
         //判断session中是否存在loginUser，登录成功的用户会在session中加入loginUser对象
