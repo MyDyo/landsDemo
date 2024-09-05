@@ -11,9 +11,11 @@ import java.util.List;
 import java.util.Map;
 
 public interface PolygonService {
-    ResultPoint comparePoint(Map<String, PointInfo> requestBody) throws IOException;
+    ResultPoint comparePointForWC(Map<String, PointInfo> requestBody) throws IOException;
 
-    ResultData comparePolygon(Map<String, List<List<Double>>> requestBody);
+    ResultData comparePolygonForFarm(Map<String, List<List<Double>>> requestBody);
+
+    ResultData comparePolygonForRuralLands(Map<String, List<List<Double>>> requestBody);
 
     List<Coordinate[]> getValidShowLayerForWC() throws JsonProcessingException;
 
@@ -22,4 +24,12 @@ public interface PolygonService {
     List<Coordinate[]> getValidShowLayerForYJJBNT() throws JsonProcessingException;
 
     List<Coordinate[]> getValidShowLayerForGBNT() throws JsonProcessingException;
+
+    List<Coordinate[]> getValidShowLayerForGarbage() throws JsonProcessingException;
+
+    ResultPoint comparePointForGarbage(Map<String, PointInfo> requestBody) throws IOException;
+
+    Double getPolygonArea(Map<String, Object> requestBody);
+
+    Double getGreenArea(Map<String, Object> requestBody);
 }

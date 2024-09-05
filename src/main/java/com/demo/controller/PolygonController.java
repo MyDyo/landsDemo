@@ -28,9 +28,9 @@ public class PolygonController {
      * @return
      */
     @CrossOrigin
-    @PostMapping("/compare")
+    @PostMapping("/compareForFarm")
     @ApiOperation("养殖场选址逻辑")
-    public Result<ResultData> comparePolygon(@RequestBody Map<String, List<List<Double>>> requestBody) {
+    public Result<ResultData> comparePolygonForFarm(@RequestBody Map<String, List<List<Double>>> requestBody) {
 
         List<List<Double>> polygonPoints = requestBody.get("polygon");
 
@@ -38,7 +38,33 @@ public class PolygonController {
             System.err.println("Polygon points are null or empty");
             return Result.error("Polygon points are null or empty",null);
         }
-        ResultData resultData = polygonService.comparePolygon(requestBody);
+        ResultData resultData = polygonService.comparePolygonForFarm(requestBody);
+
+        // 返回每个属性块的交集面积和图片
+        if (resultData == null) {
+            System.err.println("Intersection areas are null");
+            return Result.error("Intersection areas are null",null);
+        }
+        return Result.success("success",resultData);
+    }
+
+    /**
+     * 接收前端绘制的封闭区域，并返回农村宅基地比对结果
+     * @param requestBody
+     * @return
+     */
+    @CrossOrigin
+    @PostMapping("/compareForRuralLands")
+    @ApiOperation("农村宅基地选址逻辑")
+    public Result<ResultData> comparePolygonForRuralLands(@RequestBody Map<String, List<List<Double>>> requestBody) {
+
+        List<List<Double>> polygonPoints = requestBody.get("polygon");
+
+        if (polygonPoints == null || polygonPoints.isEmpty()) {
+            System.err.println("Polygon points are null or empty");
+            return Result.error("Polygon points are null or empty",null);
+        }
+        ResultData resultData = polygonService.comparePolygonForRuralLands(requestBody);
 
         // 返回每个属性块的交集面积和图片
         if (resultData == null) {
@@ -56,7 +82,7 @@ public class PolygonController {
     @CrossOrigin
     @PostMapping("/pointForWC")
     @ApiOperation("公厕服务半径下农村宅基地数据")
-    public Result<ResultPoint> comparePoint(@RequestBody Map<String,PointInfo> requestBody) throws IOException {
+    public Result<ResultPoint> comparePointForWC(@RequestBody Map<String,PointInfo> requestBody) throws IOException {
 
         PointInfo pointInfo = requestBody.get("pointInfo");
 
@@ -65,7 +91,30 @@ public class PolygonController {
             return Result.error("pointInfo are null",null);
         }
 
-        ResultPoint resultPoint = polygonService.comparePoint(requestBody);
+        ResultPoint resultPoint = polygonService.comparePointForWC(requestBody);
+
+        // 返回每个属性块的交集面积和图片
+        return Result.success("success",resultPoint);
+    }
+
+    /**
+     * 接收前端传回的布置垃圾收集点的坐标点信息，并返回垃圾收集点服务半径下农村宅基地数据
+     * @param requestBody
+     * @return
+     */
+    @CrossOrigin
+    @PostMapping("/pointForGarbage")
+    @ApiOperation("垃圾收集点服务半径下农村宅基地数据")
+    public Result<ResultPoint> comparePointForGarbage(@RequestBody Map<String,PointInfo> requestBody) throws IOException {
+
+        PointInfo pointInfo = requestBody.get("pointInfo");
+
+        if (pointInfo == null) {
+            System.err.println("pointInfo are null");
+            return Result.error("pointInfo are null",null);
+        }
+
+        ResultPoint resultPoint = polygonService.comparePointForGarbage(requestBody);
 
         // 返回每个属性块的交集面积和图片
         return Result.success("success",resultPoint);
@@ -78,10 +127,28 @@ public class PolygonController {
      */
     @CrossOrigin
     @GetMapping("/getValidShowLayerForWC")
-    @ApiOperation("布置公共卫生厕所区域的图层信息")
+    @ApiOperation("获取布置公共卫生厕所区域的图层信息")
     public Result<Object> getValidShowLayerForWC() throws JsonProcessingException {
 
         List<Coordinate[]> validcoords = polygonService.getValidShowLayerForWC();
+
+        if(validcoords == null){
+            return Result.error("获取展示图层失败",null);
+        }
+        return Result.success("success",validcoords);
+    }
+
+    /**
+     * 返回给前端可以布置垃圾收集点区域的图层信息
+     * @return
+     * @throws JsonProcessingException
+     */
+    @CrossOrigin
+    @GetMapping("/getValidShowLayerForGarbage")
+    @ApiOperation("获取布置垃圾收集点区域的图层信息")
+    public Result<Object> getValidShowLayerForGarbage() throws JsonProcessingException {
+
+        List<Coordinate[]> validcoords = polygonService.getValidShowLayerForGarbage();
 
         if(validcoords == null){
             return Result.error("获取展示图层失败",null);
@@ -140,6 +207,50 @@ public class PolygonController {
             return Result.error("获取展示图层失败",null);
         }
         return Result.success("success",validcoords);
+
+    }
+
+    @CrossOrigin
+    @PostMapping("/getPolygonArea")
+    @ApiOperation("计算绘制多边形区域的面积")
+    public Result<Double> getPolygonArea(@RequestBody Map<String, Object> requestBody){
+
+//        List<List<Double>> polygonPoints = (List<List<Double>>) requestBody.get("polygon");
+//
+//        if (polygonPoints == null || polygonPoints.isEmpty()) {
+//            System.err.println("Polygon points are null or empty");
+//            return Result.error("Polygon points are null or empty",null);
+//        }
+        Double polygonArea = polygonService.getPolygonArea(requestBody);
+
+        // 返回每个属性块的交集面积和图片
+        if (polygonArea == null) {
+            System.err.println("polygonArea are null");
+            return Result.error("polygonArea are null",null);
+        }
+        return Result.success("success",polygonArea);
+
+    }
+
+    @CrossOrigin
+    @PostMapping("/getGreenArea")
+    @ApiOperation("计算绿色区域的面积")
+    public Result<Double> getGreenArea(@RequestBody Map<String, Object> requestBody){
+
+//        List<List<Double>> polygonPoints = (List<List<Double>>) requestBody.get("polygon");
+//
+//        if (polygonPoints == null || polygonPoints.isEmpty()) {
+//            System.err.println("Polygon points are null or empty");
+//            return Result.error("Polygon points are null or empty",null);
+//        }
+        Double polygonArea = polygonService.getGreenArea(requestBody);
+
+        // 返回每个属性块的交集面积和图片
+        if (polygonArea == null) {
+            System.err.println("polygonArea are null");
+            return Result.error("polygonArea are null",null);
+        }
+        return Result.success("success",polygonArea);
 
     }
 
