@@ -15,7 +15,7 @@ public interface PolygonService {
 
     ResultData comparePolygonForFarm(Map<String, List<List<Double>>> requestBody);
 
-    ResultData comparePolygonForRuralLands(Map<String, List<List<Double>>> requestBody);
+    ResultData comparePolygonForRuralLands(Map<String, List<List<Double>>> requestBody) throws IOException;
 
     List<Coordinate[]> getValidShowLayerForWC() throws JsonProcessingException;
 

@@ -87,7 +87,7 @@ public class PolygonServiceImpl implements PolygonService {
     }
 
     @Override
-    public ResultData comparePolygonForRuralLands(Map<String, List<List<Double>>> requestBody){
+    public ResultData comparePolygonForRuralLands(Map<String, List<List<Double>>> requestBody) throws IOException {
         List<List<Double>> polygonPoints = requestBody.get("polygon");
 
         // 将前端传入的经纬度坐标转换为JTS Polygon对象
@@ -922,7 +922,7 @@ public class PolygonServiceImpl implements PolygonService {
      * @param polygon
      * @return
      */
-    private ResultData getGeoServerFeaturesAndCalculateIntersectionForRuralLands(Geometry polygon) {
+    private ResultData getGeoServerFeaturesAndCalculateIntersectionForRuralLands(Geometry polygon) throws IOException {
 
         //返回结果类型
         ResultData resultData = new ResultData();
@@ -933,7 +933,7 @@ public class PolygonServiceImpl implements PolygonService {
         //存储变量polygon,相当于全局变量,类型换成基类Geometry
         Map<String,Geometry> map = new HashMap();
         //Map<String,Geometry> map = new HashMap();
-        map.put("new_polygon",polygon);
+        //map.put("new_polygon",polygon);
         //存储红色区域图层
         List<Geometry> red = new ArrayList<>();
         //存储黄色区域图层
@@ -941,453 +941,221 @@ public class PolygonServiceImpl implements PolygonService {
         //存储绿色区域图层
         List<Geometry> green = new ArrayList<>();
 
-        // 构建GeoServer查询生态保护红线URL
-        String url_bhhx = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
-                geoserverUrl, "tongguan:dongxiao_bhhx");
+        //先进行绘制区域与生态保护红线，永久基本农田，高标农田的比对逻辑
+        FormerRedData formerRedDataForBhYjGb = getFormerRedDataFor_BH_YJ_GB(polygon);
 
-        // 构建GeoServer查询永久基本农田URL
-        String url_yjjbnt = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
-                geoserverUrl, "tongguan:dongxiao_yjjbnt");
+        //进行数据的填充
+        if(!formerRedDataForBhYjGb.getDetails().isEmpty()){
+            for (int i = 0; i < formerRedDataForBhYjGb.getDetails().size(); i++) {
+                DataDetail dataDetail = formerRedDataForBhYjGb.getDetails().get(i);
+                details.add(dataDetail);
+            }
+        }
 
-        // 构建GeoServer查询高标农田URL
-        String url_gbnt = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
-                geoserverUrl, "tongguan:dongxiao_22gb");
+        if (!formerRedDataForBhYjGb.getMap().isEmpty()){
+            map = formerRedDataForBhYjGb.getMap();
+        }else{
+            map.put("new_polygon",polygon);
+        }
+
+        if(!formerRedDataForBhYjGb.getRed().isEmpty()){
+            for (int i = 0; i < formerRedDataForBhYjGb.getRed().size(); i++) {
+                red.add(formerRedDataForBhYjGb.getRed().get(i));
+            }
+        }
 
         // 构建GeoServer查询转化为国空URL
         String url_zhwgk = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
                 geoserverUrl, "tongguan:dongxiao_zhwgk");
 
-        //System.out.println("GeoServer URL: " + url);
+        //TODO:开始比对转化为国空的数据
 
-        // 发起请求获取生态保护红线图层数据
-        ResponseEntity<String> response_bhhx = restTemplate.getForEntity(url_bhhx, String.class);
+        // 发起请求获取转化为国空图层数据
+        ResponseEntity<String> response_zhwkg = restTemplate.getForEntity(url_zhwgk, String.class);
 
-        System.out.println("GeoServer response_bhhx status: " + response_bhhx.getStatusCode());
+        System.out.println("GeoServer response_zhwkg status: " + response_zhwkg.getStatusCode());
 
-        if (response_bhhx.getStatusCode().is2xxSuccessful()) {
-            String responseBody_bhhx = response_bhhx.getBody();
-            //System.out.println("GeoServer response body: " + responseBody);
+        if (response_zhwkg.getStatusCode().is2xxSuccessful()) {
+            String response_zhwkgBody = response_zhwkg.getBody();
             System.out.println("--------------------------------------------------------------------------");
-            try {
-                // 解析GeoServer返回的JSON数据
-                JsonNode rootNode_bhhx = objectMapper.readTree(responseBody_bhhx);
-                JsonNode features_bhhx = rootNode_bhhx.path("features");
 
-                //TODO:创建一个存储绘制区域与生态保护红线交集的区域集合
-                List<Geometry> bhhx = new ArrayList<>();
-                DataDetail dataDetail_bhhx = new DataDetail();
-                Areas areas_bhhx = new Areas();
+            // 解析GeoServer返回的JSON数据
+            JsonNode rootNode_zhwgk = objectMapper.readTree(response_zhwkgBody);
+            JsonNode features_zhwgk = rootNode_zhwgk.path("features");
 
-                for (JsonNode feature_bhhx : features_bhhx) {
-//                    DataDetail dataDetail = new DataDetail();
-//                    Areas areas = new Areas();
-                    JsonNode geometryNode_bhhx = feature_bhhx.path("geometry");
+            //TODO:创建一个存储绘制区域与转化为国空的交集区域
+            List<Geometry> zhwgk_red = new ArrayList<>();
+            List<Geometry> zhwgk_yellow = new ArrayList<>();
 
-                    //保存项目名信息到DataDetail实体类
-                    dataDetail_bhhx.setProjectName(feature_bhhx.path("properties").path("HXMC").asText());
+            //创建一个集合存放用地用海分类和对应的重合面积，以此过滤重复类型
+            Map<String,Geometry> classMap = new HashMap<>();
 
-                    // 检查几何数据是否存在
-                    if (geometryNode_bhhx.isMissingNode() || geometryNode_bhhx.isNull()) {
-                        System.err.println("Geometry node is missing or null for feature ID: " + feature_bhhx.path("id").asText());
-                        continue;
-                    }
+            //TODO:转化为国空布置宅基地要考虑距离因素，暂没有实现
 
-                    // 将GeoJSON几何数据解析为JTS Geometry对象
-                    Geometry layerGeometry_bhhx = parseGeoJsonToGeometry(geometryNode_bhhx);
-                    if (!layerGeometry_bhhx.isEmpty()) {
-                        // 打印图层几何信息
-                        //System.out.println("Layer geometry:");
-                        //System.out.println(layerGeometry);
+            for (JsonNode feature_zhwgk : features_zhwgk) {
+                DataDetail dataDetail_zhwgk = new DataDetail();
+                Areas areas_zhwgk = new Areas();
+                JsonNode geometryNode_zhwgk = feature_zhwgk.path("geometry");
 
-                        IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                        IsValidOp isValidOp2 = new IsValidOp(layerGeometry_bhhx);
+                //保存项目名信息到DataDetail_zhwgk实体类
+                dataDetail_zhwgk.setProjectName("用地用海分类");
 
-                        if(isValidOp1.isValid() && isValidOp2.isValid()){
-                            Geometry intersection_bhhx = map.get("new_polygon").intersection(layerGeometry_bhhx);
-
-                            if(!intersection_bhhx.isEmpty()){
-                                IsValidOp isValidOp_bhhx = new IsValidOp(intersection_bhhx);
-                                if(isValidOp_bhhx.isValid()){
-                                    bhhx.add(intersection_bhhx);
-                                }
-                            }
-                        }
-
-                    } else {
-                        System.err.println("Layer geometry is null for feature ID: " + feature_bhhx.path("id").asText());
-                    }
+                // 检查几何数据是否存在
+                if (geometryNode_zhwgk.isMissingNode() || geometryNode_zhwgk.isNull()) {
+                    System.err.println("Geometry node is missing or null for feature ID: " + feature_zhwgk.path("id").asText());
+                    continue;
                 }
 
-                if (!bhhx.isEmpty()) {
+                // 将GeoJSON几何数据解析为JTS Geometry对象
+                Geometry layerGeometry_zhwgk = parseGeoJsonToGeometry(geometryNode_zhwgk);
+                if (!layerGeometry_zhwgk.isEmpty()) {
 
-                    Geometry bhhxAll = UnaryUnionOp.union(bhhx);
-                    double bhhxAllintersectionArea = bhhxAll.getArea();
+                    String code = feature_zhwgk.path("properties").path("转换为国空").asText();
+                    //判断宅基地选址是否满足距离要求，与国道(1202)保持20m以上范围，与县道(1207)保持10m以上范围
+                    if(code.equals("1202")){
+                        Geometry buffer20 = layerGeometry_zhwgk.buffer(20); //国道创建20m缓冲区
+                        if(polygon.intersects(buffer20)){
 
-                    //保存重叠面积信息到DataDetail实体类
-                    areas_bhhx.setAreaId("");
-                    areas_bhhx.setArea(String.format("%.2f",bhhxAllintersectionArea));
-                    dataDetail_bhhx.setAreas(areas_bhhx);
-
-                    // 生成包含重合区域和原先绘制区域的图片
-                    BufferedImage image = createImageWithPolygons1(polygon, bhhxAll);
-
-                    // 将图像转换为 Base64 编码的字符串
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    ImageIO.write(image, "png", baos);
-                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-                    //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
-
-                    //保存生成的重叠面积图片到DataDetail实体类
-                    dataDetail_bhhx.setImg(base64Image);
-
-                    dataDetail_bhhx.setTag(0);
-
-                    details.add(dataDetail_bhhx);
-
-                    IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                    IsValidOp isValidOp2 = new IsValidOp(bhhxAll);
-                    if(isValidOp1.isValid() && isValidOp2.isValid()){
-                        Geometry new_polygon = map.get("new_polygon").difference(bhhxAll);
-                        map.put("new_polygon",new_polygon);
-
-                        //传入红色区域
-                        red.add(bhhxAll);
-
-                        System.out.println("绘制区域与：【"+dataDetail_bhhx.getProjectName()+"】存在"+dataDetail_bhhx.getAreas().getArea()+"平方米的重合面积，不予通过");
-
-                    }
-                }
-
-                //TODO:开始比对永久基本农田逻辑
-
-                // 发起请求获取永久基本农田图层数据
-                ResponseEntity<String> response_yjjbnt = restTemplate.getForEntity(url_yjjbnt, String.class);
-
-                System.out.println("GeoServer response_yjjbnt status: " + response_yjjbnt.getStatusCode());
-
-                if (response_yjjbnt.getStatusCode().is2xxSuccessful()) {
-
-                    String response_yjjbntBody = response_yjjbnt.getBody();
-                    System.out.println("--------------------------------------------------------------------------");
-
-                    // 解析GeoServer返回的JSON数据
-                    JsonNode yjjbnt_rootNode = objectMapper.readTree(response_yjjbntBody);
-                    JsonNode features_yjjbnt = yjjbnt_rootNode.path("features");
-
-                    //TODO:创建一个存储绘制区域与永久基本农田的交集区域
-                    List<Geometry> yjjbnt = new ArrayList<>();
-                    DataDetail dataDetail_yjjbnt = new DataDetail();
-                    Areas areas_yjjbnt = new Areas();
-
-                    for (JsonNode feature_yjjbnt : features_yjjbnt) {
-                        JsonNode geometryNode_yjjbnt = feature_yjjbnt.path("geometry");
-
-                        //保存项目名信息到DataDetail实体类
-                        dataDetail_yjjbnt.setProjectName("永久基本农田:"+feature_yjjbnt.path("properties").path("DLMC").asText());
-
-                        // 检查几何数据是否存在
-                        if (geometryNode_yjjbnt.isMissingNode() || geometryNode_yjjbnt.isNull()) {
-                            System.err.println("Geometry node is missing or null for feature ID: " + feature_yjjbnt.path("id").asText());
-                            continue;
-                        }
-
-                        // 将GeoJSON几何数据解析为JTS Geometry对象
-                        Geometry layerGeometry_yjjbnt = parseGeoJsonToGeometry(geometryNode_yjjbnt);
-                        if (!layerGeometry_yjjbnt.isEmpty()) {
-
-                            IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                            IsValidOp isValidOp2 = new IsValidOp(layerGeometry_yjjbnt);
-                            if(isValidOp1.isValid() && isValidOp2.isValid()){
-                                Geometry intersection_yjjbnt = map.get("new_polygon").intersection(layerGeometry_yjjbnt);
-
-                                if(!intersection_yjjbnt.isEmpty()){
-                                    IsValidOp isValidOp_yjjbnt = new IsValidOp(intersection_yjjbnt);
-                                    if(isValidOp_yjjbnt.isValid()){
-                                        yjjbnt.add(intersection_yjjbnt);
-                                    }
-                                }
-                            }
-
-
-
-                        } else {
-                            System.err.println("Layer geometry is null for feature ID: " + feature_yjjbnt.path("id").asText());
-                        }
-
-                    }
-
-                    if (!yjjbnt.isEmpty()) {
-
-                        Geometry yjjbntAll = UnaryUnionOp.union(yjjbnt);
-                        double yjjbntAllintersectionArea = yjjbntAll.getArea();
-                        //Coordinate[] yjjbntAllintersectionCoordinates = yjjbntAll.getCoordinates();
-                        //Coordinate[] yjjbntAllcoordinates = transformCoordinates2(yjjbntAllintersectionCoordinates, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
-                        //dataDetail_yjjbnt.setIntersectionCoordinates(yjjbntAllcoordinates);
-                        //保存重叠面积信息到DataDetail实体类
-                        areas_yjjbnt.setAreaId("");
-                        areas_yjjbnt.setArea(String.format("%.2f",yjjbntAllintersectionArea));
-                        dataDetail_yjjbnt.setAreas(areas_yjjbnt);
-
-                        // 生成包含重合区域和原先绘制区域的图片
-                        BufferedImage image = createImageWithPolygons1(polygon, yjjbntAll);
-
-                        // 将图像转换为 Base64 编码的字符串
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        ImageIO.write(image, "png", baos);
-                        String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-
-                        //保存生成的重叠面积图片到DataDetail实体类
-                        dataDetail_yjjbnt.setImg(base64Image);
-                        dataDetail_yjjbnt.setTag(0);
-
-                        details.add(dataDetail_yjjbnt);
-
-                        IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                        IsValidOp isValidOp2 = new IsValidOp(yjjbntAll);
-
-                        if(isValidOp1.isValid() && isValidOp2.isValid()){
-                            Geometry new_polygon = map.get("new_polygon").difference(yjjbntAll);
-                            map.put("new_polygon",new_polygon);
-
-                            //传入红色区域
-                            red.add(yjjbntAll);
-
-                            System.out.println("绘制区域与：【"+dataDetail_yjjbnt.getProjectName()+"】存在"+dataDetail_yjjbnt.getAreas().getArea()+"平方米的重合面积，不予通过");
-
-                        }
-                    }
-
-                    //TODO:开始比对高标农田逻辑
-                    //开始比对高标农田逻辑
-
-                    // 发起请求获取高标农田图层数据
-                    ResponseEntity<String> response_gbnt = restTemplate.getForEntity(url_gbnt, String.class);
-
-                    System.out.println("GeoServer response_gbnt status: " + response_gbnt.getStatusCode());
-
-                    if (response_gbnt.getStatusCode().is2xxSuccessful()) {
-
-                        String response_gbntBody = response_gbnt.getBody();
-                        System.out.println("--------------------------------------------------------------------------");
-
-                        // 解析GeoServer返回的JSON数据
-                        JsonNode gbnt_rootNode = objectMapper.readTree(response_gbntBody);
-                        JsonNode features_gbnt = gbnt_rootNode.path("features");
-
-                        //TODO:创建一个存储绘制区域与高标农田的交集区域
-                        List<Geometry> gbnt = new ArrayList<>();
-                        DataDetail dataDetail_gbnt = new DataDetail();
-                        Areas areas_gbnt = new Areas();
-
-                        for (JsonNode feature_gbnt : features_gbnt) {
-                            JsonNode geometryNode_gbnt = feature_gbnt.path("geometry");
-
-                            //保存项目名信息到DataDetail实体类
-                            dataDetail_gbnt.setProjectName(feature_gbnt.path("properties").path("项目名").asText());
-
-                            // 检查几何数据是否存在
-                            if (geometryNode_gbnt.isMissingNode() || geometryNode_gbnt.isNull()) {
-                                System.err.println("Geometry node is missing or null for feature ID: " + feature_gbnt.path("id").asText());
-                                continue;
-                            }
-
-                            // 将GeoJSON几何数据解析为JTS Geometry对象
-                            Geometry layerGeometry_gbnt = parseGeoJsonToGeometry(geometryNode_gbnt);
-                            if (!layerGeometry_gbnt.isEmpty()) {
-
-                                IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                                IsValidOp isValidOp2 = new IsValidOp(layerGeometry_gbnt);
-                                if(isValidOp1.isValid() && isValidOp2.isValid()){
-                                    Geometry intersection_gbnt = map.get("new_polygon").intersection(layerGeometry_gbnt);
-
-                                    if(!intersection_gbnt.isEmpty()){
-                                        IsValidOp isValidOp_gbnt = new IsValidOp(intersection_gbnt);
-                                        if(isValidOp_gbnt.isValid()){
-                                            gbnt.add(intersection_gbnt);
-                                        }
-                                    }
-                                }
-
-                            } else {
-                                System.err.println("Layer geometry is null for feature ID: " + feature_gbnt.path("id").asText());
-                            }
-                        }
-
-                        if (!gbnt.isEmpty()) {
-
-                            Geometry gbntAll = UnaryUnionOp.union(gbnt);
-                            double gbntAllintersectionArea = gbntAll.getArea();
-                            //Coordinate[] gbntAllintersectionCoordinates = gbntAll.getCoordinates();
-                            //Coordinate[] gbntAllcoordinates = transformCoordinates2(gbntAllintersectionCoordinates, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
-                            //dataDetail_gbnt.setIntersectionCoordinates(gbntAllcoordinates);
-                            //保存重叠面积信息到DataDetail实体类
-                            areas_gbnt.setAreaId("");
-                            areas_gbnt.setArea(String.format("%.2f",gbntAllintersectionArea));
-                            dataDetail_gbnt.setAreas(areas_gbnt);
+                            DataDetail dataDetail_zjd = new DataDetail();
+                            dataDetail_zjd.setProjectName("农村宅基地");
+                            dataDetail_zjd.setTag(4);
 
                             // 生成包含重合区域和原先绘制区域的图片
-                            BufferedImage image = createImageWithPolygons1(polygon, gbntAll);
+                            BufferedImage image = createImageWithPolygons1(polygon, layerGeometry_zhwgk);
 
                             // 将图像转换为 Base64 编码的字符串
                             ByteArrayOutputStream baos = new ByteArrayOutputStream();
                             ImageIO.write(image, "png", baos);
                             String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+                            //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
 
                             //保存生成的重叠面积图片到DataDetail实体类
-                            dataDetail_gbnt.setImg(base64Image);
-                            dataDetail_gbnt.setTag(0);
+                            dataDetail_zjd.setImg(base64Image);
 
-                            details.add(dataDetail_gbnt);
+                            details.add(dataDetail_zjd);
 
-                            IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                            IsValidOp isValidOp2 = new IsValidOp(gbntAll);
-                            if(isValidOp1.isValid() && isValidOp2.isValid()){
-                                Geometry new_polygon = map.get("new_polygon").difference(gbntAll);
-                                map.put("new_polygon",new_polygon);
-
-                                //传入红色区域
-                                red.add(gbntAll);
-
-                                System.out.println("绘制区域与：【"+dataDetail_gbnt.getProjectName()+"】存在"+dataDetail_gbnt.getAreas().getArea()+"平方米的重合面积，不予通过");
-
-                            }
+                            System.out.println("农村宅基地的规划选址应与国道保持20米以上安全距离");
                         }
 
-                        //TODO:开始比对转化为国空的数据
+                    }else if(code.equals("1207")){
+                        Geometry buffer10 = layerGeometry_zhwgk.buffer(10); //县道创建10m缓冲区
+                        if(polygon.intersects(buffer10)){
 
-                        // 发起请求获取转化为国空图层数据
-                        ResponseEntity<String> response_zhwkg = restTemplate.getForEntity(url_zhwgk, String.class);
+                            DataDetail dataDetail_zjd = new DataDetail();
+                            dataDetail_zjd.setProjectName("农村宅基地");
+                            dataDetail_zjd.setTag(5);
 
-                        System.out.println("GeoServer response_zhwkg status: " + response_zhwkg.getStatusCode());
+                            // 生成包含重合区域和原先绘制区域的图片
+                            BufferedImage image = createImageWithPolygons1(polygon, layerGeometry_zhwgk);
 
-                        if (response_zhwkg.getStatusCode().is2xxSuccessful()) {
-                            String response_zhwkgBody = response_zhwkg.getBody();
-                            System.out.println("--------------------------------------------------------------------------");
+                            // 将图像转换为 Base64 编码的字符串
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            ImageIO.write(image, "png", baos);
+                            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+                            //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
 
-                            // 解析GeoServer返回的JSON数据
-                            JsonNode rootNode_zhwgk = objectMapper.readTree(response_zhwkgBody);
-                            JsonNode features_zhwgk = rootNode_zhwgk.path("features");
+                            //保存生成的重叠面积图片到DataDetail实体类
+                            dataDetail_zjd.setImg(base64Image);
 
-                            //TODO:创建一个存储绘制区域与转化为国空的交集区域
-                            List<Geometry> zhwgk_red = new ArrayList<>();
-                            List<Geometry> zhwgk_yellow = new ArrayList<>();
+                            details.add(dataDetail_zjd);
 
-                            //创建一个集合存放用地用海分类和对应的重合面积，以此过滤重复类型
-                            Map<String,Geometry> classMap = new HashMap<>();
+                            System.out.println("农村宅基地的规划选址应与县道保持10米以上安全距离");
+                        }
+                    }
 
-                            //TODO:转化为国空布置宅基地要考虑距离因素，暂没有实现
+                    IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                    IsValidOp isValidOp2 = new IsValidOp(layerGeometry_zhwgk);
+                    if(isValidOp1.isValid() && isValidOp2.isValid()){
+                        Geometry intersection_zhwgk = map.get("new_polygon").intersection(layerGeometry_zhwgk);
 
-                            for (JsonNode feature_zhwgk : features_zhwgk) {
-                                DataDetail dataDetail_zhwgk = new DataDetail();
-                                Areas areas_zhwgk = new Areas();
-                                JsonNode geometryNode_zhwgk = feature_zhwgk.path("geometry");
+                        if (!intersection_zhwgk.isEmpty()) {
 
-                                //保存项目名信息到DataDetail_zhwgk实体类
-                                dataDetail_zhwgk.setProjectName("用地用海分类");
+                            double intersectionArea_zhwgk = intersection_zhwgk.getArea();
+                            code = feature_zhwgk.path("properties").path("转换为国空").asText();
 
-                                // 检查几何数据是否存在
-                                if (geometryNode_zhwgk.isMissingNode() || geometryNode_zhwgk.isNull()) {
-                                    System.err.println("Geometry node is missing or null for feature ID: " + feature_zhwgk.path("id").asText());
-                                    continue;
+                            //如果当前遍历的区域其转化为国空字段在classMap中不存在，那么视为新用地用海分类
+                            if(!classMap.containsKey(code)){
+
+                                if(isNotPassForRuralLands(code)){
+                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
+                                    //Coordinate[] intersectionCoordinates_zhwgk = intersection_zhwgk.getCoordinates();
+                                    //Coordinate[] coordinates_zhwgk = transformCoordinates2(intersectionCoordinates_zhwgk, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
+                                    //dataDetail_zhwgk.setIntersectionCoordinates(coordinates_zhwgk);
+                                    //保存重叠面积信息到DataDetail实体类
+                                    areas_zhwgk.setAreaId(featureId_zhwgk);
+                                    areas_zhwgk.setArea(String.format("%.2f", intersectionArea_zhwgk));
+                                    dataDetail_zhwgk.setAreas(areas_zhwgk);
+
+                                    // 生成包含重合区域和原先绘制区域的图片
+                                    BufferedImage image = createImageWithPolygons1(polygon, intersection_zhwgk);
+
+                                    // 将图像转换为 Base64 编码的字符串
+                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                    ImageIO.write(image, "png", baos);
+                                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+                                    //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
+
+                                    //保存生成的重叠面积图片到DataDetail实体类
+                                    dataDetail_zhwgk.setImg(base64Image);
+                                    dataDetail_zhwgk.setTag(0);
+
+                                    details.add(dataDetail_zhwgk);
+
+                                    IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
+                                    if(isValidOp_zhwgk.isValid()){
+                                        zhwgk_red.add(intersection_zhwgk);
+                                        classMap.put(code,intersection_zhwgk);
+                                        System.out.println("绘制区域与：【"+dataDetail_zhwgk.getProjectName()+":"+dataDetail_zhwgk.getAreas().getAreaId()+"】存在"+dataDetail_zhwgk.getAreas().getArea()+"平方米的重合面积,不予通过");
+                                    }
+
+                                }else if(isWaitPassForRuralLands(code)){
+
+                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
+                                    //Coordinate[] intersectionCoordinates_zhwgk = intersection_zhwgk.getCoordinates();
+                                    //Coordinate[] coordinates_zhwgk = transformCoordinates2(intersectionCoordinates_zhwgk, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
+                                    //dataDetail_zhwgk.setIntersectionCoordinates(coordinates_zhwgk);
+                                    //保存重叠面积信息到DataDetail实体类
+                                    areas_zhwgk.setAreaId(featureId_zhwgk);
+                                    areas_zhwgk.setArea(String.format("%.2f", intersectionArea_zhwgk));
+                                    dataDetail_zhwgk.setAreas(areas_zhwgk);
+
+                                    // 生成包含重合区域和原先绘制区域的图片
+                                    BufferedImage image = createImageWithPolygons2(polygon, intersection_zhwgk);
+
+                                    // 将图像转换为 Base64 编码的字符串
+                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                    ImageIO.write(image, "png", baos);
+                                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+                                    //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
+
+                                    //保存生成的重叠面积图片到DataDetail实体类
+                                    dataDetail_zhwgk.setImg(base64Image);
+                                    dataDetail_zhwgk.setTag(1);
+
+                                    details.add(dataDetail_zhwgk);
+
+                                    IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
+                                    if(isValidOp_zhwgk.isValid()){
+                                        zhwgk_yellow.add(intersection_zhwgk);
+
+                                        classMap.put(code,intersection_zhwgk);
+
+                                        System.out.println("绘制区域与：【"+dataDetail_zhwgk.getProjectName()+":"+dataDetail_zhwgk.getAreas().getAreaId()+"】存在"+dataDetail_zhwgk.getAreas().getArea()+"平方米的重合面积,办理手续后通过");
+                                    }
+
                                 }
+                            }else{
+                                //当前遍历的区域其转化为国空字段在classMap中存在，重复的用地用海分类，进行更新details中的数据
+                                if(isNotPassForRuralLands(code)){
 
-                                // 将GeoJSON几何数据解析为JTS Geometry对象
-                                Geometry layerGeometry_zhwgk = parseGeoJsonToGeometry(geometryNode_zhwgk);
-                                if (!layerGeometry_zhwgk.isEmpty()) {
+                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
 
-                                    IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
-                                    IsValidOp isValidOp2 = new IsValidOp(layerGeometry_zhwgk);
-                                    if(isValidOp1.isValid() && isValidOp2.isValid()){
-                                        Geometry intersection_zhwgk = map.get("new_polygon").intersection(layerGeometry_zhwgk);
+                                    //在details中找到对应的分类数据,更新detail数据
+                                    for (DataDetail detail : details) {
+                                        if(detail.getAreas().getAreaId().equals(featureId_zhwgk)){
+                                            detail.getAreas().setArea(String.format("%.2f", Double.parseDouble(detail.getAreas().getArea()) + intersectionArea_zhwgk));
 
-                                        if (!intersection_zhwgk.isEmpty()) {
-
-                                            double intersectionArea_zhwgk = intersection_zhwgk.getArea();
-                                            String code = feature_zhwgk.path("properties").path("转换为国空").asText();
-
-                                            //如果当前遍历的区域其转化为国空字段在classMap中不存在，那么视为新用地用海分类
-                                            if(!classMap.containsKey(code)){
-
-                                                if(isNotPassForRuralLands(code)){
-                                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
-                                                    //Coordinate[] intersectionCoordinates_zhwgk = intersection_zhwgk.getCoordinates();
-                                                    //Coordinate[] coordinates_zhwgk = transformCoordinates2(intersectionCoordinates_zhwgk, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
-                                                    //dataDetail_zhwgk.setIntersectionCoordinates(coordinates_zhwgk);
-                                                    //保存重叠面积信息到DataDetail实体类
-                                                    areas_zhwgk.setAreaId(featureId_zhwgk);
-                                                    areas_zhwgk.setArea(String.format("%.2f", intersectionArea_zhwgk));
-                                                    dataDetail_zhwgk.setAreas(areas_zhwgk);
-
-                                                    // 生成包含重合区域和原先绘制区域的图片
-                                                    BufferedImage image = createImageWithPolygons1(polygon, intersection_zhwgk);
-
-                                                    // 将图像转换为 Base64 编码的字符串
-                                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                                    ImageIO.write(image, "png", baos);
-                                                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-                                                    //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
-
-                                                    //保存生成的重叠面积图片到DataDetail实体类
-                                                    dataDetail_zhwgk.setImg(base64Image);
-                                                    dataDetail_zhwgk.setTag(0);
-
-                                                    details.add(dataDetail_zhwgk);
-
-                                                    IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
-                                                    if(isValidOp_zhwgk.isValid()){
-                                                        zhwgk_red.add(intersection_zhwgk);
-                                                        classMap.put(code,intersection_zhwgk);
-                                                        System.out.println("绘制区域与：【"+dataDetail_zhwgk.getProjectName()+":"+dataDetail_zhwgk.getAreas().getAreaId()+"】存在"+dataDetail_zhwgk.getAreas().getArea()+"平方米的重合面积,不予通过");
-                                                    }
-
-                                                }else if(isWaitPassForRuralLands(code)){
-
-                                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
-                                                    //Coordinate[] intersectionCoordinates_zhwgk = intersection_zhwgk.getCoordinates();
-                                                    //Coordinate[] coordinates_zhwgk = transformCoordinates2(intersectionCoordinates_zhwgk, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
-                                                    //dataDetail_zhwgk.setIntersectionCoordinates(coordinates_zhwgk);
-                                                    //保存重叠面积信息到DataDetail实体类
-                                                    areas_zhwgk.setAreaId(featureId_zhwgk);
-                                                    areas_zhwgk.setArea(String.format("%.2f", intersectionArea_zhwgk));
-                                                    dataDetail_zhwgk.setAreas(areas_zhwgk);
-
-                                                    // 生成包含重合区域和原先绘制区域的图片
-                                                    BufferedImage image = createImageWithPolygons2(polygon, intersection_zhwgk);
-
-                                                    // 将图像转换为 Base64 编码的字符串
-                                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                                    ImageIO.write(image, "png", baos);
-                                                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-                                                    //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
-
-                                                    //保存生成的重叠面积图片到DataDetail实体类
-                                                    dataDetail_zhwgk.setImg(base64Image);
-                                                    dataDetail_zhwgk.setTag(1);
-
-                                                    details.add(dataDetail_zhwgk);
-
-                                                    IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
-                                                    if(isValidOp_zhwgk.isValid()){
-                                                        zhwgk_yellow.add(intersection_zhwgk);
-
-                                                        classMap.put(code,intersection_zhwgk);
-
-                                                        System.out.println("绘制区域与：【"+dataDetail_zhwgk.getProjectName()+":"+dataDetail_zhwgk.getAreas().getAreaId()+"】存在"+dataDetail_zhwgk.getAreas().getArea()+"平方米的重合面积,办理手续后通过");
-                                                    }
-
-                                                }
-                                            }else{
-                                                //当前遍历的区域其转化为国空字段在classMap中存在，重复的用地用海分类，进行更新details中的数据
-                                                if(isNotPassForRuralLands(code)){
-
-                                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
-
-                                                    //在details中找到对应的分类数据,更新detail数据
-                                                    for (DataDetail detail : details) {
-                                                        if(detail.getAreas().getAreaId().equals(featureId_zhwgk)){
-                                                            detail.getAreas().setArea(String.format("%.2f", Double.parseDouble(detail.getAreas().getArea()) + intersectionArea_zhwgk));
-
-                                                            // 生成包含重合区域和原先绘制区域的图片
+                                            // 生成包含重合区域和原先绘制区域的图片
 
 //                                                        Geometry geometry = classMap.get(code);
 //                                                        if (!geometry.isValid()) {
@@ -1403,93 +1171,93 @@ public class PolygonServiceImpl implements PolygonService {
 //                                                        intersection_zhwgk = intersection_zhwgk.buffer(0.0).buffer(-0.0001).buffer(0.0);
 
 
-                                                            BufferedImage image = createImageWithPolygons1(polygon, intersection_zhwgk.union(classMap.get(code)));
+                                            BufferedImage image = createImageWithPolygons1(polygon, intersection_zhwgk.union(classMap.get(code)));
 
-                                                            // 将图像转换为 Base64 编码的字符串
-                                                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                                            ImageIO.write(image, "png", baos);
-                                                            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+                                            // 将图像转换为 Base64 编码的字符串
+                                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                            ImageIO.write(image, "png", baos);
+                                            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
 
-                                                            detail.setImg(base64Image);
+                                            detail.setImg(base64Image);
 
-                                                            IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
-                                                            if(isValidOp_zhwgk.isValid()){
-                                                                zhwgk_red.add(intersection_zhwgk);
+                                            IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
+                                            if(isValidOp_zhwgk.isValid()){
+                                                zhwgk_red.add(intersection_zhwgk);
 
-                                                                classMap.put(code,intersection_zhwgk.union(classMap.get(code)));
+                                                classMap.put(code,intersection_zhwgk.union(classMap.get(code)));
 
-                                                                System.out.println("绘制区域与：更新后的【"+detail.getProjectName()+":"+detail.getAreas().getAreaId()+"】存在"+detail.getAreas().getArea()+"平方米的重合面积,不予通过");
+                                                System.out.println("绘制区域与：更新后的【"+detail.getProjectName()+":"+detail.getAreas().getAreaId()+"】存在"+detail.getAreas().getArea()+"平方米的重合面积,不予通过");
 
-                                                            }
-                                                        }
-                                                    }
-
-
-                                                }else if(isWaitPassForRuralLands(code)){
-
-                                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
-
-                                                    //在details中找到对应的分类数据,更新detail数据
-                                                    for (DataDetail detail : details) {
-                                                        if(detail.getAreas().getAreaId().equals(featureId_zhwgk)){
-                                                            detail.getAreas().setArea(String.format("%.2f", Double.parseDouble(detail.getAreas().getArea()) + intersectionArea_zhwgk));
-
-                                                            // 生成包含重合区域和原先绘制区域的图片
-
-//                                                        Geometry geometry = classMap.get(code);
-//                                                        if (!geometry.isValid()) {
-//                                                            geometry = GeometryFixer.fix(geometry);
-//                                                        }
-//
-//                                                        if (!intersection_zhwgk.isValid()) {
-//                                                            intersection_zhwgk = GeometryFixer.fix(intersection_zhwgk);
-//                                                        }
-//
-//                                                        // 添加一个非常小的缓冲区以修复几何对象
-//                                                        geometry = geometry.buffer(0.0).buffer(-0.0001).buffer(0.0);
-//                                                        intersection_zhwgk = intersection_zhwgk.buffer(0.0).buffer(-0.0001).buffer(0.0);
-
-
-                                                            BufferedImage image = createImageWithPolygons2(polygon, intersection_zhwgk.union(classMap.get(code)));
-
-                                                            // 将图像转换为 Base64 编码的字符串
-                                                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                                            ImageIO.write(image, "png", baos);
-                                                            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
-
-                                                            detail.setImg(base64Image);
-
-                                                            IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
-                                                            if(isValidOp_zhwgk.isValid()){
-                                                                zhwgk_yellow.add(intersection_zhwgk);
-
-                                                                classMap.put(code,intersection_zhwgk.union(classMap.get(code)));
-
-                                                                System.out.println("绘制区域与：更新后的【"+detail.getProjectName()+":"+detail.getAreas().getAreaId()+"】存在"+detail.getAreas().getArea()+"平方米的重合面积,不予通过");
-
-                                                            }
-                                                        }
-                                                    }
-
-                                                }
                                             }
-
-                                        } else {
-                                            //System.out.println("No intersection with feature ID: " + feature_zhwgk.path("id").asText());
                                         }
                                     }
 
-                                } else {
-                                    System.err.println("Layer geometry is null for feature ID: " + feature_zhwgk.path("id").asText());
+
+                                }else if(isWaitPassForRuralLands(code)){
+
+                                    String featureId_zhwgk = feature_zhwgk.path("properties").path("DLMC").asText();
+
+                                    //在details中找到对应的分类数据,更新detail数据
+                                    for (DataDetail detail : details) {
+                                        if(detail.getAreas().getAreaId().equals(featureId_zhwgk)){
+                                            detail.getAreas().setArea(String.format("%.2f", Double.parseDouble(detail.getAreas().getArea()) + intersectionArea_zhwgk));
+
+                                            // 生成包含重合区域和原先绘制区域的图片
+
+//                                                        Geometry geometry = classMap.get(code);
+//                                                        if (!geometry.isValid()) {
+//                                                            geometry = GeometryFixer.fix(geometry);
+//                                                        }
+//
+//                                                        if (!intersection_zhwgk.isValid()) {
+//                                                            intersection_zhwgk = GeometryFixer.fix(intersection_zhwgk);
+//                                                        }
+//
+//                                                        // 添加一个非常小的缓冲区以修复几何对象
+//                                                        geometry = geometry.buffer(0.0).buffer(-0.0001).buffer(0.0);
+//                                                        intersection_zhwgk = intersection_zhwgk.buffer(0.0).buffer(-0.0001).buffer(0.0);
+
+
+                                            BufferedImage image = createImageWithPolygons2(polygon, intersection_zhwgk.union(classMap.get(code)));
+
+                                            // 将图像转换为 Base64 编码的字符串
+                                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                            ImageIO.write(image, "png", baos);
+                                            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+
+                                            detail.setImg(base64Image);
+
+                                            IsValidOp isValidOp_zhwgk = new IsValidOp(intersection_zhwgk);
+                                            if(isValidOp_zhwgk.isValid()){
+                                                zhwgk_yellow.add(intersection_zhwgk);
+
+                                                classMap.put(code,intersection_zhwgk.union(classMap.get(code)));
+
+                                                System.out.println("绘制区域与：更新后的【"+detail.getProjectName()+":"+detail.getAreas().getAreaId()+"】存在"+detail.getAreas().getArea()+"平方米的重合面积,不予通过");
+
+                                            }
+                                        }
+                                    }
+
                                 }
                             }
 
-                            if (!zhwgk_red.isEmpty()) {
+                        } else {
+                            //System.out.println("No intersection with feature ID: " + feature_zhwgk.path("id").asText());
+                        }
+                    }
 
-                                Geometry zhwgkRedAll = UnaryUnionOp.union(zhwgk_red);
+                } else {
+                    System.err.println("Layer geometry is null for feature ID: " + feature_zhwgk.path("id").asText());
+                }
+            }
 
-                                // 在进行相减运算的时候，先检查并修复几何对象的有效性
-                                Geometry new_polygon = map.get("new_polygon");
+            if (!zhwgk_red.isEmpty()) {
+
+                Geometry zhwgkRedAll = UnaryUnionOp.union(zhwgk_red);
+
+                // 在进行相减运算的时候，先检查并修复几何对象的有效性
+                Geometry new_polygon = map.get("new_polygon");
 //                                if (!new_polygon.isValid()) {
 //                                    new_polygon = GeometryFixer.fix(new_polygon);
 //                                }
@@ -1502,26 +1270,26 @@ public class PolygonServiceImpl implements PolygonService {
 //                                new_polygon = new_polygon.buffer(0.0).buffer(-0.0001).buffer(0.0);
 //                                zhwgkRedAll = zhwgkRedAll.buffer(0.0).buffer(-0.0001).buffer(0.0);
 
-                                // 计算相减结果
-                                IsValidOp isValidOp1 = new IsValidOp(new_polygon);
-                                IsValidOp isValidOp2 = new IsValidOp(zhwgkRedAll);
-                                if(isValidOp1.isValid() && isValidOp2.isValid()){
-                                    new_polygon = new_polygon.difference(zhwgkRedAll);
+                // 计算相减结果
+                IsValidOp isValidOp1 = new IsValidOp(new_polygon);
+                IsValidOp isValidOp2 = new IsValidOp(zhwgkRedAll);
+                if(isValidOp1.isValid() && isValidOp2.isValid()){
+                    new_polygon = new_polygon.difference(zhwgkRedAll);
 
-                                    map.put("new_polygon",new_polygon);
+                    map.put("new_polygon",new_polygon);
 
-                                    //传入红色区域
-                                    red.add(zhwgkRedAll);
-                                }
+                    //传入红色区域
+                    red.add(zhwgkRedAll);
+                }
 
-                            }
+            }
 
-                            if (!zhwgk_yellow.isEmpty()) {
+            if (!zhwgk_yellow.isEmpty()) {
 
-                                Geometry zhwgkYellowAll = UnaryUnionOp.union(zhwgk_yellow);
+                Geometry zhwgkYellowAll = UnaryUnionOp.union(zhwgk_yellow);
 
-                                // 在进行相减运算的时候，先检查并修复几何对象的有效性
-                                Geometry new_polygon = map.get("new_polygon");
+                // 在进行相减运算的时候，先检查并修复几何对象的有效性
+                Geometry new_polygon = map.get("new_polygon");
 //                                if (!new_polygon.isValid()) {
 //                                    new_polygon = GeometryFixer.fix(new_polygon);
 //                                }
@@ -1534,170 +1302,140 @@ public class PolygonServiceImpl implements PolygonService {
 //                                new_polygon = new_polygon.buffer(0.0).buffer(-0.0001).buffer(0.0);
 //                                zhwgkYellowAll = zhwgkYellowAll.buffer(0.0).buffer(-0.0001).buffer(0.0);
 
-                                //计算相减结果
-                                IsValidOp isValidOp1 = new IsValidOp(new_polygon);
-                                IsValidOp isValidOp2 = new IsValidOp(zhwgkYellowAll);
-                                if(isValidOp1.isValid() && isValidOp2.isValid()){
+                //计算相减结果
+                IsValidOp isValidOp1 = new IsValidOp(new_polygon);
+                IsValidOp isValidOp2 = new IsValidOp(zhwgkYellowAll);
+                if(isValidOp1.isValid() && isValidOp2.isValid()){
 
-                                    // 使用 GeometryPrecisionReducer 减少精度
-                                    PrecisionModel precisionModel = new PrecisionModel(1000);
-                                    GeometryPrecisionReducer precisionReducer = new GeometryPrecisionReducer(precisionModel);
-                                    Geometry reducedPrecisionRedUnion = precisionReducer.reduce(new_polygon);
+                    // 使用 GeometryPrecisionReducer 减少精度
+                    PrecisionModel precisionModel = new PrecisionModel(1000);
+                    GeometryPrecisionReducer precisionReducer = new GeometryPrecisionReducer(precisionModel);
+                    Geometry reducedPrecisionRedUnion = precisionReducer.reduce(new_polygon);
 
-                                    new_polygon = reducedPrecisionRedUnion.difference(zhwgkYellowAll);
-                                    map.put("new_polygon",new_polygon);
+                    new_polygon = reducedPrecisionRedUnion.difference(zhwgkYellowAll);
+                    map.put("new_polygon",new_polygon);
 
-                                    //传入黄色区域
-                                    yellow.add(zhwgkYellowAll);
-                                }
-
-                            }
-
-//                            if((red.get("red") == null) && (yellow.get("yellow") == null)){
-//                                green.put("green",polygon);
-//                            }
-//
-//                            if((red.get("red") != null) && (yellow.get("yellow") == null)){
-//                                green.put("green",polygon.difference(red.get("red")));
-//                            }
-//
-//                            if((red.get("red") == null) && (yellow.get("yellow") != null)){
-//                                green.put("green",polygon.difference(yellow.get("yellow")));
-//                            }
-//
-//                            if((red.get("red") != null) && (yellow.get("yellow") != null)){
-//                                green.put("green",polygon.difference(red.get("red")).difference(yellow.get("yellow")));
-//                            }
-
-                            //TODO:比对逻辑结束
-                            //更新map集合中的值，换成原始传入图形数据
-                            map.put("new_polygon",polygon);
-                            //System.out.println(polygon);
-
-                            if(!red.isEmpty()){
-                                // 转换几何对象
-                                Geometry redUnion = UnaryUnionOp.union(red);
-                                createImageWithPolygons1(polygon, redUnion);
-                                IsValidOp isValidOp_redUnion = new IsValidOp(redUnion);
-                                if(isValidOp_redUnion.isValid()){
-
-                                    // 使用 GeometryPrecisionReducer 减少精度
-                                    PrecisionModel precisionModel = new PrecisionModel(1000);
-                                    GeometryPrecisionReducer precisionReducer = new GeometryPrecisionReducer(precisionModel);
-                                    Geometry reducedPrecisionRedUnion = precisionReducer.reduce(map.get("new_polygon"));
-
-                                    Geometry new_polygon = reducedPrecisionRedUnion.difference(redUnion);
-                                    map.put("new_polygon",new_polygon);
-
-                                    // 定义源和目标坐标系
-                                    CRSFactory crsFactory = new CRSFactory();
-                                    CoordinateReferenceSystem sourceCRS1 = crsFactory.createFromName("EPSG:4525");
-                                    CoordinateReferenceSystem targetCRS1 = crsFactory.createFromName("EPSG:4326");
-
-                                    // 创建转换器
-                                    CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
-                                    CoordinateTransform transform = ctFactory.createTransform(sourceCRS1, targetCRS1);
-                                    Geometry transformedGeometry = transformGeometry(redUnion, transform);
-
-                                    // 使用 GeoTools 的 GeometryJSON 生成 GeoJSON
-                                    GeometryJSON gjson = new GeometryJSON(14);
-                                    StringWriter writer = new StringWriter();
-                                    gjson.write(transformedGeometry, writer);
-
-                                    // 设置结果
-                                    overLapArea.setRedGeoJson(writer.toString());
-                                }
-
-                            }
-                            if(!yellow.isEmpty()){
-                                // 转换几何对象
-                                Geometry yellowUnion = UnaryUnionOp.union(yellow);
-                                createImageWithPolygons2(polygon, yellowUnion);
-                                //System.out.println(yellowUnion);
-                                // 检查并简化几何图形（如果需要）
-                                Geometry new_polygon = map.get("new_polygon");
-                                //new_polygon = DouglasPeuckerSimplifier.simplify(new_polygon, 0.001);
-                                //yellowUnion = DouglasPeuckerSimplifier.simplify(yellowUnion, 0.001);
-                                IsValidOp isValidOp1 = new IsValidOp(new_polygon);
-                                IsValidOp isValidOp2 = new IsValidOp(yellowUnion);
-                                if(isValidOp1.isValid() && isValidOp2.isValid()){
-
-                                    // 使用 GeometryPrecisionReducer 减少精度
-                                    PrecisionModel precisionModel = new PrecisionModel(1000);
-                                    GeometryPrecisionReducer precisionReducer = new GeometryPrecisionReducer(precisionModel);
-                                    Geometry reducedPrecisionRedUnion = precisionReducer.reduce(new_polygon);
-
-                                    new_polygon = reducedPrecisionRedUnion.difference(yellowUnion);
-                                    map.put("new_polygon",new_polygon);
-
-                                    // 定义源和目标坐标系
-                                    CRSFactory crsFactory = new CRSFactory();
-                                    CoordinateReferenceSystem sourceCRS1 = crsFactory.createFromName("EPSG:4525");
-                                    CoordinateReferenceSystem targetCRS1 = crsFactory.createFromName("EPSG:4326");
-
-                                    // 创建转换器
-                                    CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
-                                    CoordinateTransform transform = ctFactory.createTransform(sourceCRS1, targetCRS1);
-
-                                    Geometry transformedGeometry = transformGeometry(yellowUnion, transform);
-                                    // 使用 GeoTools 的 GeometryJSON 生成 GeoJSON
-                                    GeometryJSON gjson = new GeometryJSON(14);
-                                    StringWriter writer = new StringWriter();
-                                    gjson.write(transformedGeometry, writer);
-
-                                    // 设置结果
-                                    overLapArea.setYellowGeoJson(writer.toString());
-                                }
-
-                            }
-
-                            //设置绿色区域数据
-                            // 转换几何对象
-                            Geometry greenUnion = map.get("new_polygon");
-                            createImageWithPolygons3(polygon, greenUnion);
-                            //System.out.println(greenUnion);
-                            //Geometry greenUnion = polygon.difference((UnaryUnionOp.union(yellow)));
-                            IsValidOp isValidOp = new IsValidOp(greenUnion);
-                            if(isValidOp.isValid()){
-
-                                // 定义源和目标坐标系
-                                CRSFactory crsFactory = new CRSFactory();
-                                CoordinateReferenceSystem sourceCRS1 = crsFactory.createFromName("EPSG:4525");
-                                CoordinateReferenceSystem targetCRS1 = crsFactory.createFromName("EPSG:4326");
-
-                                // 创建转换器
-                                CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
-                                CoordinateTransform transform = ctFactory.createTransform(sourceCRS1, targetCRS1);
-
-                                Geometry transformedGeometry = transformGeometry(greenUnion, transform);
-                                // 使用 GeoTools 的 GeometryJSON 生成 GeoJSON
-                                GeometryJSON gjson = new GeometryJSON(14);
-                                StringWriter writer = new StringWriter();
-                                gjson.write(transformedGeometry, writer);
-
-                                // 设置结果
-                                overLapArea.setGreenGeoJson(writer.toString());
-
-                                resultData.setOverLapArea(overLapArea);
-                                resultData.setDataDetails(details);
-
-                                return resultData;
-                            }
-
-                        }
-
-                    }
-
-
+                    //传入黄色区域
+                    yellow.add(zhwgkYellowAll);
                 }
 
-
-            } catch (IOException e) {
-                System.err.println("Failed to parse response JSON with error: " + e.getMessage());
             }
-        } else {
-            System.err.println("Failed to fetch data from GeoServer. Status Code: " + response_bhhx.getStatusCode());
-            return null;
+
+            //TODO:比对逻辑结束
+            //更新map集合中的值，换成原始传入图形数据
+            map.put("new_polygon",polygon);
+            //System.out.println(polygon);
+
+            if(!red.isEmpty()){
+                // 转换几何对象
+                Geometry redUnion = UnaryUnionOp.union(red);
+                createImageWithPolygons1(polygon, redUnion);
+                IsValidOp isValidOp_redUnion = new IsValidOp(redUnion);
+                if(isValidOp_redUnion.isValid()){
+
+                    // 使用 GeometryPrecisionReducer 减少精度
+                    PrecisionModel precisionModel = new PrecisionModel(1000);
+                    GeometryPrecisionReducer precisionReducer = new GeometryPrecisionReducer(precisionModel);
+                    Geometry reducedPrecisionRedUnion = precisionReducer.reduce(map.get("new_polygon"));
+
+                    Geometry new_polygon = reducedPrecisionRedUnion.difference(redUnion);
+                    map.put("new_polygon",new_polygon);
+
+                    // 定义源和目标坐标系
+                    CRSFactory crsFactory = new CRSFactory();
+                    CoordinateReferenceSystem sourceCRS1 = crsFactory.createFromName("EPSG:4525");
+                    CoordinateReferenceSystem targetCRS1 = crsFactory.createFromName("EPSG:4326");
+
+                    // 创建转换器
+                    CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
+                    CoordinateTransform transform = ctFactory.createTransform(sourceCRS1, targetCRS1);
+                    Geometry transformedGeometry = transformGeometry(redUnion, transform);
+
+                    // 使用 GeoTools 的 GeometryJSON 生成 GeoJSON
+                    GeometryJSON gjson = new GeometryJSON(14);
+                    StringWriter writer = new StringWriter();
+                    gjson.write(transformedGeometry, writer);
+
+                    // 设置结果
+                    overLapArea.setRedGeoJson(writer.toString());
+                }
+
+            }
+            if(!yellow.isEmpty()){
+                // 转换几何对象
+                Geometry yellowUnion = UnaryUnionOp.union(yellow);
+                createImageWithPolygons2(polygon, yellowUnion);
+                //System.out.println(yellowUnion);
+                // 检查并简化几何图形（如果需要）
+                Geometry new_polygon = map.get("new_polygon");
+                //new_polygon = DouglasPeuckerSimplifier.simplify(new_polygon, 0.001);
+                //yellowUnion = DouglasPeuckerSimplifier.simplify(yellowUnion, 0.001);
+                IsValidOp isValidOp1 = new IsValidOp(new_polygon);
+                IsValidOp isValidOp2 = new IsValidOp(yellowUnion);
+                if(isValidOp1.isValid() && isValidOp2.isValid()){
+
+                    // 使用 GeometryPrecisionReducer 减少精度
+                    PrecisionModel precisionModel = new PrecisionModel(1000);
+                    GeometryPrecisionReducer precisionReducer = new GeometryPrecisionReducer(precisionModel);
+                    Geometry reducedPrecisionRedUnion = precisionReducer.reduce(new_polygon);
+
+                    new_polygon = reducedPrecisionRedUnion.difference(yellowUnion);
+                    map.put("new_polygon",new_polygon);
+
+                    // 定义源和目标坐标系
+                    CRSFactory crsFactory = new CRSFactory();
+                    CoordinateReferenceSystem sourceCRS1 = crsFactory.createFromName("EPSG:4525");
+                    CoordinateReferenceSystem targetCRS1 = crsFactory.createFromName("EPSG:4326");
+
+                    // 创建转换器
+                    CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
+                    CoordinateTransform transform = ctFactory.createTransform(sourceCRS1, targetCRS1);
+
+                    Geometry transformedGeometry = transformGeometry(yellowUnion, transform);
+                    // 使用 GeoTools 的 GeometryJSON 生成 GeoJSON
+                    GeometryJSON gjson = new GeometryJSON(14);
+                    StringWriter writer = new StringWriter();
+                    gjson.write(transformedGeometry, writer);
+
+                    // 设置结果
+                    overLapArea.setYellowGeoJson(writer.toString());
+                }
+
+            }
+
+            //设置绿色区域数据
+            // 转换几何对象
+            Geometry greenUnion = map.get("new_polygon");
+            createImageWithPolygons3(polygon, greenUnion);
+            //System.out.println(greenUnion);
+            //Geometry greenUnion = polygon.difference((UnaryUnionOp.union(yellow)));
+            IsValidOp isValidOp = new IsValidOp(greenUnion);
+            if(isValidOp.isValid()){
+
+                // 定义源和目标坐标系
+                CRSFactory crsFactory = new CRSFactory();
+                CoordinateReferenceSystem sourceCRS1 = crsFactory.createFromName("EPSG:4525");
+                CoordinateReferenceSystem targetCRS1 = crsFactory.createFromName("EPSG:4326");
+
+                // 创建转换器
+                CoordinateTransformFactory ctFactory = new CoordinateTransformFactory();
+                CoordinateTransform transform = ctFactory.createTransform(sourceCRS1, targetCRS1);
+
+                Geometry transformedGeometry = transformGeometry(greenUnion, transform);
+                // 使用 GeoTools 的 GeometryJSON 生成 GeoJSON
+                GeometryJSON gjson = new GeometryJSON(14);
+                StringWriter writer = new StringWriter();
+                gjson.write(transformedGeometry, writer);
+
+                // 设置结果
+                overLapArea.setGreenGeoJson(writer.toString());
+
+                resultData.setOverLapArea(overLapArea);
+                resultData.setDataDetails(details);
+
+                return resultData;
+            }
+
         }
 
         return resultData;
@@ -2419,65 +2157,62 @@ public class PolygonServiceImpl implements PolygonService {
         GeometryFactory geometryFactory = new GeometryFactory();
         double totalArea = 0.0;
 
-        if (type.equals("Polygon")) {
-            // 如果是 Polygon，获取的坐标类型为 List<List<List<Double>>>
-            List<?> polygonPoints = (List<?>) requestBody.get("polygon");
+        // 坐标系定义
+        String sourceCRS = "EPSG:4326"; // WGS84坐标系
+        String targetCRS = "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"; // CGCS2000_3_Degree_GK_Zone_37坐标系
 
-            // 检查是否为正确的 List 结构，并处理第一个 Polygon
-            if (polygonPoints != null && !polygonPoints.isEmpty() && polygonPoints.get(0) instanceof List) {
-                // 解包最外层的 List，处理内部的 List<List<Double>>
-                List<List<Double>> coordinatesList = (List<List<Double>>) ((List<?>) polygonPoints.get(0));
+        // 获取 Polygon 或 MultiPolygon 数据
+        List<?> polygonData = (List<?>) requestBody.get("polygon");
 
-                // 处理 Polygon 坐标
-                Coordinate[] coordinates = new Coordinate[coordinatesList.size() + 1];
-                for (int i = 0; i < coordinatesList.size(); i++) {
-                    List<Double> point = coordinatesList.get(i);
-                    if (point.size() < 2) {
-                        System.err.println("Point size is less than 2 at index: " + i);
+        if (polygonData != null && !polygonData.isEmpty()) {
+            // 处理 Polygon 类型
+            if (type.equals("Polygon")) {
+                // 确保结构正确
+                if (polygonData.get(0) instanceof List) {
+                    List<List<List<Double>>> coordinatesList = (List<List<List<Double>>>) polygonData;
+
+                    // 创建坐标数组，处理 Polygon 的每个点
+                    Coordinate[] coordinates = new Coordinate[coordinatesList.get(0).size() + 1];
+                    for (int i = 0; i < coordinatesList.get(0).size(); i++) {
+                        List<Double> point = coordinatesList.get(0).get(i);
+                        if (point.size() < 2) {
+                            System.err.println("Point size is less than 2 at index: " + i);
+                            return 0.0;
+                        }
+                        coordinates[i] = new Coordinate(point.get(0), point.get(1));
+                    }
+
+                    // 闭合多边形
+                    coordinates[coordinatesList.get(0).size()] = coordinates[0];
+
+                    // 坐标转换
+                    Coordinate[] transformedCoordinates;
+                    try {
+                        transformedCoordinates = transformCoordinates1(coordinates, sourceCRS, targetCRS);
+                    } catch (Exception e) {
+                        System.err.println("Coordinate transformation failed: " + e.getMessage());
                         return 0.0;
                     }
-                    coordinates[i] = new Coordinate(point.get(0), point.get(1));
+
+                    // 创建多边形并计算面积
+                    Polygon polygon = geometryFactory.createPolygon(transformedCoordinates);
+                    totalArea = polygon.getArea();
+
+                } else {
+                    System.err.println("Invalid data structure for Polygon.");
+                    return 0.0;
                 }
 
-                // 闭合多边形
-                coordinates[coordinatesList.size()] = coordinates[0];
+            } else if (type.equals("MultiPolygon")) {
+                // 处理 MultiPolygon 类型
+                for (Object polygonObject : polygonData) {
+                    if (polygonObject instanceof List) {
+                        List<List<List<Double>>> coordinatesList = (List<List<List<Double>>>) polygonObject;
 
-                // 坐标转换
-                String sourceCRS = "EPSG:4326"; // WGS84坐标系
-                String targetCRS = "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"; // CGCS2000_3_Degree_GK_Zone_37坐标系
-
-                Coordinate[] transformedCoordinates;
-                try {
-                    transformedCoordinates = transformCoordinates1(coordinates, sourceCRS, targetCRS);
-                } catch (Exception e) {
-                    System.err.println("Coordinate transformation failed: " + e.getMessage());
-                    return 0.0; // 如果坐标转换失败，返回0面积
-                }
-
-                // 创建多边形并计算面积
-                Polygon polygon = geometryFactory.createPolygon(transformedCoordinates);
-                totalArea = polygon.getArea();
-
-            } else {
-                System.err.println("Invalid data structure for Polygon.");
-                return 0.0;
-            }
-
-        } else if (type.equals("MultiPolygon")) {
-            // 如果是 MultiPolygon，获取的坐标类型为 List<List<List<Double>>>
-            List<?> multiPolygonPoints = (List<?>) requestBody.get("polygon");
-
-            if (multiPolygonPoints != null && !multiPolygonPoints.isEmpty() && multiPolygonPoints.get(0) instanceof List) {
-                for (Object polygonObject : multiPolygonPoints) {
-                    List<?> polygonList = (List<?>) polygonObject;
-
-                    if (polygonList.get(0) instanceof List) {
-                        List<List<Double>> coordinatesList = (List<List<Double>>) polygonList;
-
-                        // 处理 MultiPolygon 的每个 Polygon
-                        Coordinate[] coordinates = new Coordinate[coordinatesList.size() + 1];
-                        for (int i = 0; i < coordinatesList.size(); i++) {
-                            List<Double> point = coordinatesList.get(i);
+                        // 创建坐标数组，处理 MultiPolygon 中的每个 Polygon
+                        Coordinate[] coordinates = new Coordinate[coordinatesList.get(0).size() + 1];
+                        for (int i = 0; i < coordinatesList.get(0).size(); i++) {
+                            List<Double> point = coordinatesList.get(0).get(i);
                             if (point.size() < 2) {
                                 System.err.println("Point size is less than 2 at index: " + i);
                                 return 0.0;
@@ -2486,36 +2221,35 @@ public class PolygonServiceImpl implements PolygonService {
                         }
 
                         // 闭合多边形
-                        coordinates[coordinatesList.size()] = coordinates[0];
+                        coordinates[coordinatesList.get(0).size()] = coordinates[0];
 
                         // 坐标转换
-                        String sourceCRS = "EPSG:4326"; // WGS84坐标系
-                        String targetCRS = "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"; // CGCS2000_3_Degree_GK_Zone_37坐标系
-
                         Coordinate[] transformedCoordinates;
                         try {
                             transformedCoordinates = transformCoordinates1(coordinates, sourceCRS, targetCRS);
                         } catch (Exception e) {
                             System.err.println("Coordinate transformation failed: " + e.getMessage());
-                            return 0.0; // 如果坐标转换失败，返回0面积
+                            return 0.0;
                         }
 
                         // 创建多边形并计算面积
                         Polygon polygon = geometryFactory.createPolygon(transformedCoordinates);
                         totalArea += polygon.getArea();
+
                     } else {
                         System.err.println("Invalid data structure for MultiPolygon.");
                         return 0.0;
                     }
                 }
+
             } else {
-                System.err.println("Invalid data structure for MultiPolygon.");
+                System.err.println("Unsupported geometry type: " + type);
                 return 0.0;
             }
 
         } else {
-            System.err.println("Unsupported geometry type: " + type);
-            return null; // 返回空值或者抛出异常
+            System.err.println("Invalid data structure.");
+            return 0.0;
         }
 
         // 对总面积进行精度处理并返回
@@ -3080,6 +2814,7 @@ public class PolygonServiceImpl implements PolygonService {
         }
         return false;
     }
+
     //转化为国空布置农村宅基地办理手续后通过
     public boolean isWaitPassForRuralLands(String code){
         if(checkprefix(code,"01",2)){
@@ -3122,5 +2857,345 @@ public class PolygonServiceImpl implements PolygonService {
             return true;
         }
         return false;
+    }
+
+    //选址比对生态保护红线，永久基本农田，高标农田占用情况
+    public FormerRedData getFormerRedDataFor_BH_YJ_GB(Geometry polygon){
+        //返回结果类型
+        FormerRedData formerRedData = new FormerRedData();
+
+        //存储各个图层的交集面积和项目名称
+        List<DataDetail> details = new ArrayList<>();
+        //存储变量polygon,相当于全局变量,类型换成基类Geometry
+        Map<String,Geometry> map = new HashMap();
+        //Map<String,Geometry> map = new HashMap();
+        map.put("new_polygon",polygon);
+        //存储红色区域图层
+        List<Geometry> red = new ArrayList<>();
+
+        // 构建GeoServer查询生态保护红线URL
+        String url_bhhx = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
+                geoserverUrl, "tongguan:dongxiao_bhhx");
+
+        // 构建GeoServer查询永久基本农田URL
+        String url_yjjbnt = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
+                geoserverUrl, "tongguan:dongxiao_yjjbnt");
+
+        // 构建GeoServer查询高标农田URL
+        String url_gbnt = String.format("%s/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=%s&outputFormat=application/json",
+                geoserverUrl, "tongguan:dongxiao_22gb");
+
+
+        // 发起请求获取生态保护红线图层数据
+        ResponseEntity<String> response_bhhx = restTemplate.getForEntity(url_bhhx, String.class);
+
+        System.out.println("GeoServer response_bhhx status: " + response_bhhx.getStatusCode());
+
+        if (response_bhhx.getStatusCode().is2xxSuccessful()) {
+            String responseBody_bhhx = response_bhhx.getBody();
+            //System.out.println("GeoServer response body: " + responseBody);
+            System.out.println("--------------------------------------------------------------------------");
+            try {
+                // 解析GeoServer返回的JSON数据
+                JsonNode rootNode_bhhx = objectMapper.readTree(responseBody_bhhx);
+                JsonNode features_bhhx = rootNode_bhhx.path("features");
+
+                //TODO:创建一个存储绘制区域与生态保护红线交集的区域集合
+                List<Geometry> bhhx = new ArrayList<>();
+                DataDetail dataDetail_bhhx = new DataDetail();
+                Areas areas_bhhx = new Areas();
+
+                for (JsonNode feature_bhhx : features_bhhx) {
+//                    DataDetail dataDetail = new DataDetail();
+//                    Areas areas = new Areas();
+                    JsonNode geometryNode_bhhx = feature_bhhx.path("geometry");
+
+                    //保存项目名信息到DataDetail实体类
+                    dataDetail_bhhx.setProjectName(feature_bhhx.path("properties").path("HXMC").asText());
+
+                    // 检查几何数据是否存在
+                    if (geometryNode_bhhx.isMissingNode() || geometryNode_bhhx.isNull()) {
+                        System.err.println("Geometry node is missing or null for feature ID: " + feature_bhhx.path("id").asText());
+                        continue;
+                    }
+
+                    // 将GeoJSON几何数据解析为JTS Geometry对象
+                    Geometry layerGeometry_bhhx = parseGeoJsonToGeometry(geometryNode_bhhx);
+                    if (!layerGeometry_bhhx.isEmpty()) {
+                        // 打印图层几何信息
+                        //System.out.println("Layer geometry:");
+                        //System.out.println(layerGeometry);
+
+                        IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                        IsValidOp isValidOp2 = new IsValidOp(layerGeometry_bhhx);
+
+                        if(isValidOp1.isValid() && isValidOp2.isValid()){
+                            Geometry intersection_bhhx = map.get("new_polygon").intersection(layerGeometry_bhhx);
+
+                            if(!intersection_bhhx.isEmpty()){
+                                IsValidOp isValidOp_bhhx = new IsValidOp(intersection_bhhx);
+                                if(isValidOp_bhhx.isValid()){
+                                    bhhx.add(intersection_bhhx);
+                                }
+                            }
+                        }
+
+                    } else {
+                        System.err.println("Layer geometry is null for feature ID: " + feature_bhhx.path("id").asText());
+                    }
+                }
+
+                if (!bhhx.isEmpty()) {
+
+                    Geometry bhhxAll = UnaryUnionOp.union(bhhx);
+                    double bhhxAllintersectionArea = bhhxAll.getArea();
+
+                    //保存重叠面积信息到DataDetail实体类
+                    areas_bhhx.setAreaId("");
+                    areas_bhhx.setArea(String.format("%.2f",bhhxAllintersectionArea));
+                    dataDetail_bhhx.setAreas(areas_bhhx);
+
+                    // 生成包含重合区域和原先绘制区域的图片
+                    BufferedImage image = createImageWithPolygons1(polygon, bhhxAll);
+
+                    // 将图像转换为 Base64 编码的字符串
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    ImageIO.write(image, "png", baos);
+                    String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+                    //System.out.println("Base64 Image: " + base64Image); // 调试输出 Base64 字符串
+
+                    //保存生成的重叠面积图片到DataDetail实体类
+                    dataDetail_bhhx.setImg(base64Image);
+
+                    dataDetail_bhhx.setTag(0);
+
+                    details.add(dataDetail_bhhx);
+
+                    IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                    IsValidOp isValidOp2 = new IsValidOp(bhhxAll);
+                    if(isValidOp1.isValid() && isValidOp2.isValid()){
+                        Geometry new_polygon = map.get("new_polygon").difference(bhhxAll);
+                        map.put("new_polygon",new_polygon);
+
+                        //传入红色区域
+                        red.add(bhhxAll);
+
+                        System.out.println("绘制区域与：【"+dataDetail_bhhx.getProjectName()+"】存在"+dataDetail_bhhx.getAreas().getArea()+"平方米的重合面积，不予通过");
+
+                    }
+                }
+
+                //TODO:开始比对永久基本农田逻辑
+
+                // 发起请求获取永久基本农田图层数据
+                ResponseEntity<String> response_yjjbnt = restTemplate.getForEntity(url_yjjbnt, String.class);
+
+                System.out.println("GeoServer response_yjjbnt status: " + response_yjjbnt.getStatusCode());
+
+                if (response_yjjbnt.getStatusCode().is2xxSuccessful()) {
+
+                    String response_yjjbntBody = response_yjjbnt.getBody();
+                    System.out.println("--------------------------------------------------------------------------");
+
+                    // 解析GeoServer返回的JSON数据
+                    JsonNode yjjbnt_rootNode = objectMapper.readTree(response_yjjbntBody);
+                    JsonNode features_yjjbnt = yjjbnt_rootNode.path("features");
+
+                    //TODO:创建一个存储绘制区域与永久基本农田的交集区域
+                    List<Geometry> yjjbnt = new ArrayList<>();
+                    DataDetail dataDetail_yjjbnt = new DataDetail();
+                    Areas areas_yjjbnt = new Areas();
+
+                    for (JsonNode feature_yjjbnt : features_yjjbnt) {
+                        JsonNode geometryNode_yjjbnt = feature_yjjbnt.path("geometry");
+
+                        //保存项目名信息到DataDetail实体类
+                        dataDetail_yjjbnt.setProjectName("永久基本农田:"+feature_yjjbnt.path("properties").path("DLMC").asText());
+
+                        // 检查几何数据是否存在
+                        if (geometryNode_yjjbnt.isMissingNode() || geometryNode_yjjbnt.isNull()) {
+                            System.err.println("Geometry node is missing or null for feature ID: " + feature_yjjbnt.path("id").asText());
+                            continue;
+                        }
+
+                        // 将GeoJSON几何数据解析为JTS Geometry对象
+                        Geometry layerGeometry_yjjbnt = parseGeoJsonToGeometry(geometryNode_yjjbnt);
+                        if (!layerGeometry_yjjbnt.isEmpty()) {
+
+                            IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                            IsValidOp isValidOp2 = new IsValidOp(layerGeometry_yjjbnt);
+                            if(isValidOp1.isValid() && isValidOp2.isValid()){
+                                Geometry intersection_yjjbnt = map.get("new_polygon").intersection(layerGeometry_yjjbnt);
+
+                                if(!intersection_yjjbnt.isEmpty()){
+                                    IsValidOp isValidOp_yjjbnt = new IsValidOp(intersection_yjjbnt);
+                                    if(isValidOp_yjjbnt.isValid()){
+                                        yjjbnt.add(intersection_yjjbnt);
+                                    }
+                                }
+                            }
+
+
+
+                        } else {
+                            System.err.println("Layer geometry is null for feature ID: " + feature_yjjbnt.path("id").asText());
+                        }
+
+                    }
+
+                    if (!yjjbnt.isEmpty()) {
+
+                        Geometry yjjbntAll = UnaryUnionOp.union(yjjbnt);
+                        double yjjbntAllintersectionArea = yjjbntAll.getArea();
+                        //Coordinate[] yjjbntAllintersectionCoordinates = yjjbntAll.getCoordinates();
+                        //Coordinate[] yjjbntAllcoordinates = transformCoordinates2(yjjbntAllintersectionCoordinates, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
+                        //dataDetail_yjjbnt.setIntersectionCoordinates(yjjbntAllcoordinates);
+                        //保存重叠面积信息到DataDetail实体类
+                        areas_yjjbnt.setAreaId("");
+                        areas_yjjbnt.setArea(String.format("%.2f",yjjbntAllintersectionArea));
+                        dataDetail_yjjbnt.setAreas(areas_yjjbnt);
+
+                        // 生成包含重合区域和原先绘制区域的图片
+                        BufferedImage image = createImageWithPolygons1(polygon, yjjbntAll);
+
+                        // 将图像转换为 Base64 编码的字符串
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        ImageIO.write(image, "png", baos);
+                        String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+
+                        //保存生成的重叠面积图片到DataDetail实体类
+                        dataDetail_yjjbnt.setImg(base64Image);
+                        dataDetail_yjjbnt.setTag(0);
+
+                        details.add(dataDetail_yjjbnt);
+
+                        IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                        IsValidOp isValidOp2 = new IsValidOp(yjjbntAll);
+
+                        if(isValidOp1.isValid() && isValidOp2.isValid()){
+                            Geometry new_polygon = map.get("new_polygon").difference(yjjbntAll);
+                            map.put("new_polygon",new_polygon);
+
+                            //传入红色区域
+                            red.add(yjjbntAll);
+
+                            System.out.println("绘制区域与：【"+dataDetail_yjjbnt.getProjectName()+"】存在"+dataDetail_yjjbnt.getAreas().getArea()+"平方米的重合面积，不予通过");
+
+                        }
+                    }
+
+                    //TODO:开始比对高标农田逻辑
+                    //开始比对高标农田逻辑
+
+                    // 发起请求获取高标农田图层数据
+                    ResponseEntity<String> response_gbnt = restTemplate.getForEntity(url_gbnt, String.class);
+
+                    System.out.println("GeoServer response_gbnt status: " + response_gbnt.getStatusCode());
+
+                    if (response_gbnt.getStatusCode().is2xxSuccessful()) {
+
+                        String response_gbntBody = response_gbnt.getBody();
+                        System.out.println("--------------------------------------------------------------------------");
+
+                        // 解析GeoServer返回的JSON数据
+                        JsonNode gbnt_rootNode = objectMapper.readTree(response_gbntBody);
+                        JsonNode features_gbnt = gbnt_rootNode.path("features");
+
+                        //TODO:创建一个存储绘制区域与高标农田的交集区域
+                        List<Geometry> gbnt = new ArrayList<>();
+                        DataDetail dataDetail_gbnt = new DataDetail();
+                        Areas areas_gbnt = new Areas();
+
+                        for (JsonNode feature_gbnt : features_gbnt) {
+                            JsonNode geometryNode_gbnt = feature_gbnt.path("geometry");
+
+                            //保存项目名信息到DataDetail实体类
+                            dataDetail_gbnt.setProjectName(feature_gbnt.path("properties").path("项目名").asText());
+
+                            // 检查几何数据是否存在
+                            if (geometryNode_gbnt.isMissingNode() || geometryNode_gbnt.isNull()) {
+                                System.err.println("Geometry node is missing or null for feature ID: " + feature_gbnt.path("id").asText());
+                                continue;
+                            }
+
+                            // 将GeoJSON几何数据解析为JTS Geometry对象
+                            Geometry layerGeometry_gbnt = parseGeoJsonToGeometry(geometryNode_gbnt);
+                            if (!layerGeometry_gbnt.isEmpty()) {
+
+                                IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                                IsValidOp isValidOp2 = new IsValidOp(layerGeometry_gbnt);
+                                if(isValidOp1.isValid() && isValidOp2.isValid()){
+                                    Geometry intersection_gbnt = map.get("new_polygon").intersection(layerGeometry_gbnt);
+
+                                    if(!intersection_gbnt.isEmpty()){
+                                        IsValidOp isValidOp_gbnt = new IsValidOp(intersection_gbnt);
+                                        if(isValidOp_gbnt.isValid()){
+                                            gbnt.add(intersection_gbnt);
+                                        }
+                                    }
+                                }
+
+                            } else {
+                                System.err.println("Layer geometry is null for feature ID: " + feature_gbnt.path("id").asText());
+                            }
+                        }
+
+                        if (!gbnt.isEmpty()) {
+
+                            Geometry gbntAll = UnaryUnionOp.union(gbnt);
+                            double gbntAllintersectionArea = gbntAll.getArea();
+                            //Coordinate[] gbntAllintersectionCoordinates = gbntAll.getCoordinates();
+                            //Coordinate[] gbntAllcoordinates = transformCoordinates2(gbntAllintersectionCoordinates, "+proj=tmerc +lat_0=0 +lon_0=111 +k=1.0 +x_0=37500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs", "EPSG:4326");
+                            //dataDetail_gbnt.setIntersectionCoordinates(gbntAllcoordinates);
+                            //保存重叠面积信息到DataDetail实体类
+                            areas_gbnt.setAreaId("");
+                            areas_gbnt.setArea(String.format("%.2f",gbntAllintersectionArea));
+                            dataDetail_gbnt.setAreas(areas_gbnt);
+
+                            // 生成包含重合区域和原先绘制区域的图片
+                            BufferedImage image = createImageWithPolygons1(polygon, gbntAll);
+
+                            // 将图像转换为 Base64 编码的字符串
+                            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                            ImageIO.write(image, "png", baos);
+                            String base64Image = Base64.getEncoder().encodeToString(baos.toByteArray());
+
+                            //保存生成的重叠面积图片到DataDetail实体类
+                            dataDetail_gbnt.setImg(base64Image);
+                            dataDetail_gbnt.setTag(0);
+
+                            details.add(dataDetail_gbnt);
+
+                            IsValidOp isValidOp1 = new IsValidOp(map.get("new_polygon"));
+                            IsValidOp isValidOp2 = new IsValidOp(gbntAll);
+                            if(isValidOp1.isValid() && isValidOp2.isValid()){
+                                Geometry new_polygon = map.get("new_polygon").difference(gbntAll);
+                                map.put("new_polygon",new_polygon);
+
+                                //传入红色区域
+                                red.add(gbntAll);
+
+                                System.out.println("绘制区域与：【"+dataDetail_gbnt.getProjectName()+"】存在"+dataDetail_gbnt.getAreas().getArea()+"平方米的重合面积，不予通过");
+
+                                //封装数据到FormerRedData中
+                                formerRedData.setDetails(details);
+                                formerRedData.setRed(red);
+                                formerRedData.setMap(map);
+                            }
+                        }
+
+                    }
+
+                }
+
+
+            } catch (IOException e) {
+                System.err.println("Failed to parse response JSON with error: " + e.getMessage());
+            }
+        } else {
+            System.err.println("Failed to fetch data from GeoServer. Status Code: " + response_bhhx.getStatusCode());
+            return null;
+        }
+        return formerRedData;
     }
 }

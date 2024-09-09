@@ -56,7 +56,7 @@ public class PolygonController {
     @CrossOrigin
     @PostMapping("/compareForRuralLands")
     @ApiOperation("农村宅基地选址逻辑")
-    public Result<ResultData> comparePolygonForRuralLands(@RequestBody Map<String, List<List<Double>>> requestBody) {
+    public Result<ResultData> comparePolygonForRuralLands(@RequestBody Map<String, List<List<Double>>> requestBody) throws IOException {
 
         List<List<Double>> polygonPoints = requestBody.get("polygon");
 
